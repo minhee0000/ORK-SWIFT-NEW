@@ -1,5 +1,7 @@
 # ORK-SWIFT-NEW
 
+[English](README.md) | [한국어](README.ko.md)
+
 Production-oriented Swift source obfuscation for Xcode build pipelines.
 
 The tool works on a copied source tree before `xcodebuild` runs, so the original
@@ -237,12 +239,29 @@ Use `--no-default-excludes` only when you want full control.
 
 ## Validation
 
-The current safety model has been dry-run against large public Swift codebases,
-including Signal-iOS, Firefox iOS, DuckDuckGo iOS, WordPress iOS, Nextcloud iOS,
-Mastodon iOS, sourcekit-lsp, swift-docc, swift-format, swift-package-manager,
-swift-protobuf, and swift-syntax. On that set, ORK-SWIFT-NEW scanned 15,251
-Swift files, planned 11,203 file renames, planned 13,838 private function
-renames, and emitted valid JSON manifests for every project.
+All numbers below come from actual local runs of the release binary, not
+estimates.
+
+Large public Swift codebase dry-run with `--rename-files`, `--rename-types`,
+and `--rename-private-functions`:
+
+| Repository | Swift files | File renames | Type renames | Function renames | Skipped types | Skipped functions |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DuckDuckGo-iOS | 1,197 | 697 | 1,114 | 1,107 | 1,041 | 344 |
+| Nextcloud-iOS | 382 | 382 | 257 | 201 | 212 | 51 |
+| Signal-iOS | 2,554 | 626 | 1,398 | 3,377 | 6,198 | 3,018 |
+| WordPress-iOS | 3,384 | 3,176 | 2,547 | 2,967 | 3,780 | 1,208 |
+| firefox-ios | 2,917 | 2,917 | 2,434 | 3,604 | 3,040 | 889 |
+| mastodon-ios | 839 | 837 | 445 | 380 | 1,339 | 198 |
+| sourcekit-lsp | 418 | 105 | 359 | 259 | 329 | 159 |
+| swift-docc | 895 | 348 | 456 | 282 | 925 | 151 |
+| swift-format | 250 | 205 | 157 | 166 | 141 | 83 |
+| swift-package-manager | 1,197 | 998 | 537 | 519 | 2,136 | 323 |
+| swift-protobuf | 474 | 466 | 122 | 188 | 7,594 | 46 |
+| swift-syntax | 744 | 446 | 423 | 788 | 1,439 | 388 |
+| **Total** | **15,251** | **11,203** | **10,249** | **13,838** | **28,174** | **6,858** |
+
+All 12 large-project manifests parsed as valid JSON.
 
 Actual obfuscated SwiftPM builds have been verified for swift-protobuf,
 swift-format, swift-syntax, swift-docc, sourcekit-lsp, and
@@ -251,11 +270,11 @@ swift-package-manager.
 Type renaming has also been verified with an obfuscated SwiftPM fixture whose
 renamed source and renamed test target both pass `swift test`.
 
-With `--rename-types` enabled, an additional 20-project validation scanned
-7,800 Swift files, planned 6,601 file renames, 4,287 type renames, and 1,828
-private function renames, and emitted valid JSON manifests for every project.
-Actual obfuscated builds passed for swift-log, swift-metrics, SnapKit,
-swift-algorithms, fluent, swift-dependencies, Moya, and Nimble.
+Additional validation with `--rename-types` enabled:
+
+| Suite | Projects | Swift files | File renames | Type renames | Function renames | Skipped types | Skipped functions | Valid manifests | Obfuscated builds passed |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Public Swift libraries and apps | 20 | 7,800 | 6,601 | 4,287 | 1,828 | 11,112 | 1,182 | 20 | swift-log, swift-metrics, SnapKit, swift-algorithms, fluent, swift-dependencies, Moya, Nimble |
 
 ## Manifest
 
