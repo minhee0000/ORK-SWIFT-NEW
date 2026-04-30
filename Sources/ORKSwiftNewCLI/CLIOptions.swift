@@ -11,6 +11,7 @@ struct CLIOptions {
     var inPlace = false
     var dryRun = false
     var renameFiles = false
+    var renameDirectories = false
     var renamePrivateFunctions = false
     var renameTypes = false
     var useDefaultExcludes = true
@@ -27,6 +28,7 @@ struct CLIOptions {
             inPlace: inPlace,
             dryRun: dryRun,
             renameFiles: renameFiles,
+            renameDirectories: renameDirectories,
             renamePrivateFunctions: renamePrivateFunctions,
             renameTypes: renameTypes,
             useDefaultExcludes: useDefaultExcludes,

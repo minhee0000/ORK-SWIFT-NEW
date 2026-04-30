@@ -38,6 +38,8 @@ struct ArgumentParser {
                 options.dryRun = true
             case "--rename-files":
                 options.renameFiles = true
+            case "--rename-directories":
+                options.renameDirectories = true
             case "--rename-private-functions":
                 options.renamePrivateFunctions = true
             case "--rename-types":
@@ -72,6 +74,7 @@ struct ArgumentParser {
 
         Options:
           --rename-files               Rename .swift file basenames in the working source tree.
+          --rename-directories         Rename Swift-only source directories in the working source tree.
           --rename-private-functions   Rename safe private/fileprivate Swift function declarations and local call sites.
           --rename-types               Rename safe internal/private Swift struct/class/enum/actor names and references.
           --exclude <pattern>          Skip matching files/directories. Repeat for multiple paths.

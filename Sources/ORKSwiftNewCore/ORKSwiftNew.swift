@@ -82,11 +82,22 @@ public struct ORKSwiftNew {
             )
         }
 
+        if options.renameDirectories {
+            try SwiftDirectoryRenamer(fileManager: fileManager).rename(
+                in: workingRoot,
+                seed: options.seed,
+                filter: pathFilter,
+                dryRun: options.dryRun,
+                manifest: &manifest
+            )
+        }
+
         try manifestWriter.write(manifest, to: options.manifestPath)
 
         let summary = ObfuscationSummary(
             swiftFiles: swiftFiles(in: workingRoot, excluding: pathFilter, fileManager: fileManager).count,
             fileRenames: manifest.fileRenames.count,
+            directoryRenames: manifest.directoryRenames.count,
             functionRenames: manifest.functionRenames.count,
             skippedFunctions: manifest.skippedFunctions.count,
             typeRenames: manifest.typeRenames.count,
@@ -99,9 +110,9 @@ public struct ORKSwiftNew {
     }
 
     private func validate(_ options: ObfuscationOptions) throws {
-        guard options.renameFiles || options.renamePrivateFunctions || options.renameTypes else {
+        guard options.renameFiles || options.renameDirectories || options.renamePrivateFunctions || options.renameTypes else {
             throw ORKSwiftNewError.invalidConfiguration(
-                "Select at least one transform: --rename-files, --rename-private-functions, or --rename-types"
+                "Select at least one transform: --rename-files, --rename-directories, --rename-private-functions, or --rename-types"
             )
         }
 
