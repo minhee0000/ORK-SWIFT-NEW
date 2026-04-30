@@ -43,6 +43,7 @@ public struct ObfuscationOptions {
     public var dryRun: Bool
     public var renameFiles: Bool
     public var renamePrivateFunctions: Bool
+    public var renameTypes: Bool
     public var useDefaultExcludes: Bool
     public var excludePatterns: [String]
 
@@ -55,6 +56,7 @@ public struct ObfuscationOptions {
         dryRun: Bool = false,
         renameFiles: Bool = false,
         renamePrivateFunctions: Bool = false,
+        renameTypes: Bool = false,
         useDefaultExcludes: Bool = true,
         excludePatterns: [String] = []
     ) {
@@ -66,6 +68,7 @@ public struct ObfuscationOptions {
         self.dryRun = dryRun
         self.renameFiles = renameFiles
         self.renamePrivateFunctions = renamePrivateFunctions
+        self.renameTypes = renameTypes
         self.useDefaultExcludes = useDefaultExcludes
         self.excludePatterns = excludePatterns
     }
@@ -106,6 +109,32 @@ public struct ObfuscationManifest: Codable, Equatable {
         }
     }
 
+    public struct TypeRename: Codable, Equatable {
+        public let file: String
+        public let kind: String
+        public let from: String
+        public let to: String
+
+        public init(file: String, kind: String, from: String, to: String) {
+            self.file = file
+            self.kind = kind
+            self.from = from
+            self.to = to
+        }
+    }
+
+    public struct SkippedType: Codable, Equatable {
+        public let file: String
+        public let name: String
+        public let reason: String
+
+        public init(file: String, name: String, reason: String) {
+            self.file = file
+            self.name = name
+            self.reason = reason
+        }
+    }
+
     public let generatedAt: String
     public let seed: String
     public let input: String
@@ -114,6 +143,8 @@ public struct ObfuscationManifest: Codable, Equatable {
     public var fileRenames: [FileRename]
     public var functionRenames: [FunctionRename]
     public var skippedFunctions: [SkippedFunction]
+    public var typeRenames: [TypeRename]
+    public var skippedTypes: [SkippedType]
 
     public init(
         generatedAt: String,
@@ -123,7 +154,9 @@ public struct ObfuscationManifest: Codable, Equatable {
         excludedPatterns: [String],
         fileRenames: [FileRename] = [],
         functionRenames: [FunctionRename] = [],
-        skippedFunctions: [SkippedFunction] = []
+        skippedFunctions: [SkippedFunction] = [],
+        typeRenames: [TypeRename] = [],
+        skippedTypes: [SkippedType] = []
     ) {
         self.generatedAt = generatedAt
         self.seed = seed
@@ -133,6 +166,8 @@ public struct ObfuscationManifest: Codable, Equatable {
         self.fileRenames = fileRenames
         self.functionRenames = functionRenames
         self.skippedFunctions = skippedFunctions
+        self.typeRenames = typeRenames
+        self.skippedTypes = skippedTypes
     }
 }
 
@@ -141,6 +176,8 @@ public struct ObfuscationSummary: Equatable {
     public let fileRenames: Int
     public let functionRenames: Int
     public let skippedFunctions: Int
+    public let typeRenames: Int
+    public let skippedTypes: Int
     public let output: String
     public let excludedPatterns: [String]
 
@@ -149,6 +186,8 @@ public struct ObfuscationSummary: Equatable {
         fileRenames: Int,
         functionRenames: Int,
         skippedFunctions: Int,
+        typeRenames: Int,
+        skippedTypes: Int,
         output: String,
         excludedPatterns: [String]
     ) {
@@ -156,6 +195,8 @@ public struct ObfuscationSummary: Equatable {
         self.fileRenames = fileRenames
         self.functionRenames = functionRenames
         self.skippedFunctions = skippedFunctions
+        self.typeRenames = typeRenames
+        self.skippedTypes = skippedTypes
         self.output = output
         self.excludedPatterns = excludedPatterns
     }

@@ -14,6 +14,8 @@ line target.
 
 - `ORKSwiftNew`: validates options and orchestrates the pipeline.
 - `PathFilter`: applies generic include/exclude policy.
+- `SourceTypeTransformer`: applies project-wide conservative type renames.
+- `TypeRenamer`: token-level nominal type candidate analysis and replacement.
 - `SourceFunctionTransformer`: applies source-level private function renames.
 - `FunctionRenamer`: token-level function candidate analysis and replacement.
 - `FunctionSignatureAnalyzer`: lightweight signature and call-label analysis used
@@ -30,8 +32,12 @@ semantic knowledge. This is intentional:
 
 - Runtime-facing declarations stay unchanged.
 - Public/open/dynamic/override declarations stay unchanged.
+- Exported and runtime-sensitive type declarations stay unchanged.
 - Unsafe overload groups stay unchanged.
 - Function references and ambiguous occurrences stay unchanged.
+- Type declarations are skipped when the name appears in strings, has duplicate
+  declarations, is exported, is nested, is used as a qualified external type,
+  or appears in value-declaration positions.
 - Private functions are skipped when call labels or same-name body calls suggest
   a type-checked overload could be selected.
 - Directories using access-controlled imports keep source filenames to avoid

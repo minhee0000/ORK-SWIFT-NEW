@@ -1,7 +1,7 @@
 import Foundation
 import ORKSwiftNewCore
 
-let version = "0.1.0"
+let version = "0.2.0"
 
 struct CLIOptions {
     var inputPath: String?
@@ -12,6 +12,7 @@ struct CLIOptions {
     var dryRun = false
     var renameFiles = false
     var renamePrivateFunctions = false
+    var renameTypes = false
     var useDefaultExcludes = true
     var excludePatterns: [String] = []
     var verbose = false
@@ -27,6 +28,7 @@ struct CLIOptions {
             dryRun: dryRun,
             renameFiles: renameFiles,
             renamePrivateFunctions: renamePrivateFunctions,
+            renameTypes: renameTypes,
             useDefaultExcludes: useDefaultExcludes,
             excludePatterns: excludePatterns
         )

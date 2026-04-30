@@ -137,6 +137,34 @@ final class ObfuscatorTests: XCTestCase {
         XCTAssertEqual(result.manifest.functionRenames.count, 1)
     }
 
+    func testFileRenameManifestKeepsRelativeDirectoriesUnderTmpRoot() throws {
+        let root = URL(fileURLWithPath: "/tmp")
+            .appendingPathComponent("ORKSwiftNewTests")
+            .appendingPathComponent(UUID().uuidString)
+        defer { try? fileManager.removeItem(at: root) }
+
+        let input = root.appendingPathComponent("Input")
+        let output = root.appendingPathComponent("Output")
+        let sources = input.appendingPathComponent("Sources/App")
+        try fileManager.createDirectory(at: sources, withIntermediateDirectories: true)
+        try "struct Demo {}\n".write(
+            to: sources.appendingPathComponent("Demo.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameFiles: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertEqual(result.manifest.fileRenames.first?.from, "Sources/App/Demo.swift")
+        XCTAssertTrue(result.manifest.fileRenames.first?.to.hasPrefix("Sources/App/S_") == true)
+    }
+
     func testDefaultExcludesPreservePackageManifest() throws {
         let input = temporaryRoot.appendingPathComponent("Input")
         let output = temporaryRoot.appendingPathComponent("Output")
@@ -241,6 +269,131 @@ final class ObfuscatorTests: XCTestCase {
         ))
         XCTAssertEqual(result.manifest.fileRenames.count, 1)
         XCTAssertEqual(result.manifest.fileRenames.first?.from, "Sources/Normal/Normal.swift")
+    }
+
+    func testRenamesInternalTypesAndReferences() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        let sources = input.appendingPathComponent("Sources/App")
+        try fileManager.createDirectory(at: sources, withIntermediateDirectories: true)
+        try """
+        struct ProfileCoordinator {
+            let value: String
+        }
+        """.write(
+            to: sources.appendingPathComponent("ProfileCoordinator.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try """
+        struct ProfileFactory {
+            static func make() -> ProfileCoordinator {
+                ProfileCoordinator(value: "ready")
+            }
+        }
+        """.write(
+            to: sources.appendingPathComponent("ProfileFactory.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameTypes: true,
+            useDefaultExcludes: false
+        ))
+
+        let coordinatorRename = try XCTUnwrap(result.manifest.typeRenames.first { $0.from == "ProfileCoordinator" })
+        XCTAssertEqual(result.manifest.typeRenames.count, 2)
+        XCTAssertTrue(coordinatorRename.to.hasPrefix("T_"))
+
+        let transformedFactory = try String(
+            contentsOf: output.appendingPathComponent("Sources/App/ProfileFactory.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(transformedFactory.contains("ProfileCoordinator"))
+        XCTAssertTrue(transformedFactory.contains("-> \(coordinatorRename.to)"))
+        XCTAssertTrue(transformedFactory.contains("\(coordinatorRename.to)(value:"))
+    }
+
+    func testTypeNamesInsideStringLiteralsAreSkipped() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
+        let source = input.appendingPathComponent("ProfileCoordinator.swift")
+        try """
+        let reflected = "ProfileCoordinator"
+
+        struct ProfileCoordinator {}
+        """.write(to: source, atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameTypes: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertEqual(result.manifest.typeRenames.count, 0)
+        XCTAssertTrue(result.manifest.skippedTypes.contains { skipped in
+            skipped.name == "ProfileCoordinator"
+                && skipped.reason == "identifier appears inside a string literal or interpolation"
+        })
+    }
+
+    func testNestedTypesAreSkipped() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
+        let source = input.appendingPathComponent("Container.swift")
+        try """
+        struct Container {
+            struct NestedType {}
+        }
+        """.write(to: source, atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameTypes: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertTrue(result.manifest.typeRenames.contains { $0.from == "Container" })
+        XCTAssertFalse(result.manifest.typeRenames.contains { $0.from == "NestedType" })
+        XCTAssertTrue(result.manifest.skippedTypes.contains { skipped in
+            skipped.name == "NestedType" && skipped.reason == "nested type declarations are skipped"
+        })
+    }
+
+    func testQualifiedExternalTypeOccurrencesCauseTypeRenameSkip() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
+        let source = input.appendingPathComponent("Subscription.swift")
+        try """
+        class Subscription {}
+
+        let external: Combine.Subscription? = nil
+        """.write(to: source, atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameTypes: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertFalse(result.manifest.typeRenames.contains { $0.from == "Subscription" })
+        XCTAssertTrue(result.manifest.skippedTypes.contains { skipped in
+            skipped.name == "Subscription"
+                && skipped.reason.contains("qualified member or external type reference")
+        })
     }
 
     func testFunctionNamesInsideStringLiteralsAreSkipped() throws {

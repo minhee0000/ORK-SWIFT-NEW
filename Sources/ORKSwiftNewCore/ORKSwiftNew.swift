@@ -52,6 +52,16 @@ public struct ORKSwiftNew {
             excludedPatterns: excludePatterns
         )
 
+        if options.renameTypes {
+            try SourceTypeTransformer(fileManager: fileManager).transform(
+                in: workingRoot,
+                seed: options.seed,
+                filter: pathFilter,
+                dryRun: options.dryRun,
+                manifest: &manifest
+            )
+        }
+
         if options.renamePrivateFunctions {
             try SourceFunctionTransformer(fileManager: fileManager).transform(
                 in: workingRoot,
@@ -79,6 +89,8 @@ public struct ORKSwiftNew {
             fileRenames: manifest.fileRenames.count,
             functionRenames: manifest.functionRenames.count,
             skippedFunctions: manifest.skippedFunctions.count,
+            typeRenames: manifest.typeRenames.count,
+            skippedTypes: manifest.skippedTypes.count,
             output: outputDescription,
             excludedPatterns: excludePatterns
         )
@@ -87,9 +99,9 @@ public struct ORKSwiftNew {
     }
 
     private func validate(_ options: ObfuscationOptions) throws {
-        guard options.renameFiles || options.renamePrivateFunctions else {
+        guard options.renameFiles || options.renamePrivateFunctions || options.renameTypes else {
             throw ORKSwiftNewError.invalidConfiguration(
-                "Select at least one transform: --rename-files or --rename-private-functions"
+                "Select at least one transform: --rename-files, --rename-private-functions, or --rename-types"
             )
         }
 

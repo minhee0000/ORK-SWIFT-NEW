@@ -14,6 +14,12 @@ struct ConsoleReporter {
                     manifestPath: options.manifestPath
                 )
             }
+            for skipped in result.manifest.skippedTypes {
+                writeLine(
+                    "[ORK-SWIFT-NEW] skipped type \(skipped.file):\(skipped.name) - \(skipped.reason)",
+                    manifestPath: options.manifestPath
+                )
+            }
         }
     }
 
@@ -21,7 +27,9 @@ struct ConsoleReporter {
         let prefix = "[ORK-SWIFT-NEW]"
         writeLine("\(prefix) swift files: \(result.summary.swiftFiles)", manifestPath: manifestPath)
         writeLine("\(prefix) file renames: \(result.summary.fileRenames)", manifestPath: manifestPath)
+        writeLine("\(prefix) type renames: \(result.summary.typeRenames)", manifestPath: manifestPath)
         writeLine("\(prefix) function renames: \(result.summary.functionRenames)", manifestPath: manifestPath)
+        writeLine("\(prefix) skipped types: \(result.summary.skippedTypes)", manifestPath: manifestPath)
         writeLine("\(prefix) skipped functions: \(result.summary.skippedFunctions)", manifestPath: manifestPath)
         writeLine(
             "\(prefix) excludes: \(result.summary.excludedPatterns.isEmpty ? "(none)" : result.summary.excludedPatterns.joined(separator: ", "))",

@@ -1,14 +1,51 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 func makeURL(_ path: String) -> URL {
     URL(fileURLWithPath: path).standardizedFileURL
 }
 
+func canonicalPath(_ url: URL) -> String {
+    let path = url.path
+    var buffer = [CChar](repeating: 0, count: Int(PATH_MAX))
+    if path.withCString({ realpath($0, &buffer) }) != nil {
+        return String(cString: buffer)
+    }
+
+    let parent = url.deletingLastPathComponent()
+    var parentBuffer = [CChar](repeating: 0, count: Int(PATH_MAX))
+    if parent.path.withCString({ realpath($0, &parentBuffer) }) != nil {
+        return String(cString: parentBuffer) + "/" + url.lastPathComponent
+    }
+
+    return path
+}
+
 func relativePath(from root: URL, to file: URL) -> String {
-    let rootPath = root.standardizedFileURL.path
-    let filePath = file.standardizedFileURL.path
-    guard filePath.hasPrefix(rootPath + "/") else { return file.lastPathComponent }
-    return String(filePath.dropFirst(rootPath.count + 1))
+    let rootPaths = [
+        root.path,
+        root.standardizedFileURL.path,
+        root.resolvingSymlinksInPath().path,
+        canonicalPath(root)
+    ]
+    let filePaths = [
+        file.path,
+        file.standardizedFileURL.path,
+        file.resolvingSymlinksInPath().path,
+        canonicalPath(file)
+    ]
+
+    for rootPath in rootPaths {
+        for filePath in filePaths where filePath.hasPrefix(rootPath + "/") {
+            return String(filePath.dropFirst(rootPath.count + 1))
+        }
+    }
+
+    return file.lastPathComponent
 }
 
 func ensureDirectory(_ url: URL, fileManager: FileManager) throws {

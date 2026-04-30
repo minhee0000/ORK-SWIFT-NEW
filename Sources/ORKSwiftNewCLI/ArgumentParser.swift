@@ -40,6 +40,8 @@ struct ArgumentParser {
                 options.renameFiles = true
             case "--rename-private-functions":
                 options.renamePrivateFunctions = true
+            case "--rename-types":
+                options.renameTypes = true
             case "--quiet":
                 options.quiet = true
             case "--verbose":
@@ -71,6 +73,7 @@ struct ArgumentParser {
         Options:
           --rename-files               Rename .swift file basenames in the working source tree.
           --rename-private-functions   Rename safe private/fileprivate Swift function declarations and local call sites.
+          --rename-types               Rename safe internal/private Swift struct/class/enum/actor names and references.
           --exclude <pattern>          Skip matching files/directories. Repeat for multiple paths.
                                        Plain names match any path component; glob patterns match relative paths.
           --no-default-excludes        Disable built-in excludes: \(defaultExcludePatterns.joined(separator: ", ")).
@@ -84,9 +87,10 @@ struct ArgumentParser {
           --help                       Print this help.
 
         Safety:
-          Function renaming is intentionally conservative. Runtime-sensitive declarations
-          such as @objc, dynamic, override, public/open APIs, unsafe overloads, function
-          references, and suspicious string interpolation usages are skipped.
+          Function and type renaming are intentionally conservative. Runtime-sensitive
+          declarations such as @objc, dynamic, override, public/open APIs, unsafe
+          overloads, function references, and suspicious string interpolation usages
+          are skipped.
         """
     }
 }
