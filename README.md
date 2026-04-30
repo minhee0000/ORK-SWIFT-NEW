@@ -29,6 +29,9 @@ See `Docs/Architecture.md` for component responsibilities and safety model.
 - Conservative `private` and `fileprivate func` declarations.
 - Local call sites that are safe to rewrite.
 
+Type names such as `struct`, `class`, `enum`, and `actor` declarations are not
+renamed in the current release.
+
 The function pass intentionally skips runtime-sensitive or ambiguous Swift:
 
 - `@objc`, `@IBAction`, `@NSManaged`, `_cdecl`, `_silgen_name`,
@@ -115,8 +118,12 @@ Actual manifest mapping:
 | Type | Before | After |
 | --- | --- | --- |
 | File | `Sources/App/ProfileCoordinator.swift` | `Sources/App/S_ace3a40d9bf6.swift` |
+| Type name | `ProfileCoordinator` | `ProfileCoordinator` |
 | Function | `formatTitle` | `f_bbdaff57b8d0` |
 | Function | `sanitize` | `f_97c0f5600c47` |
+
+`ProfileCoordinator` remains unchanged because type-name obfuscation is not part
+of the current safety model.
 
 <table>
 <tr>
