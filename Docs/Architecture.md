@@ -16,6 +16,8 @@ line target.
 - `PathFilter`: applies generic include/exclude policy.
 - `SourceFunctionTransformer`: applies source-level private function renames.
 - `FunctionRenamer`: token-level function candidate analysis and replacement.
+- `FunctionSignatureAnalyzer`: lightweight signature and call-label analysis used
+  to reject ambiguous private function rewrites.
 - `SwiftFileRenamer`: deterministic `.swift` file basename renames.
 - `ManifestWriter`: serializes JSON output.
 - `FileSystem`: filesystem helpers and Swift file discovery.
@@ -30,6 +32,10 @@ semantic knowledge. This is intentional:
 - Public/open/dynamic/override declarations stay unchanged.
 - Unsafe overload groups stay unchanged.
 - Function references and ambiguous occurrences stay unchanged.
+- Private functions are skipped when call labels or same-name body calls suggest
+  a type-checked overload could be selected.
+- Directories using access-controlled imports keep source filenames to avoid
+  Swift compiler file-order sensitivity.
 - Generated and excluded paths are copied but not transformed.
 
 The build wrapper should run this tool on a temporary project copy. Production

@@ -202,6 +202,47 @@ final class ObfuscatorTests: XCTestCase {
         XCTAssertFalse(result.manifest.fileRenames.contains { $0.from == "LinuxMain.swift" })
     }
 
+    func testAccessControlledImportDirectoriesPreserveSwiftFilenames() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        let importSensitive = input.appendingPathComponent("Sources/ImportSensitive")
+        let normal = input.appendingPathComponent("Sources/Normal")
+        try fileManager.createDirectory(at: importSensitive, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: normal, withIntermediateDirectories: true)
+        try "internal import Foundation\nstruct InternalImport {}\n".write(
+            to: importSensitive.appendingPathComponent("InternalImport.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "import Foundation\nstruct PlainImport {}\n".write(
+            to: importSensitive.appendingPathComponent("PlainImport.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "struct Normal {}\n".write(
+            to: normal.appendingPathComponent("Normal.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameFiles: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertTrue(fileManager.fileExists(
+            atPath: output.appendingPathComponent("Sources/ImportSensitive/InternalImport.swift").path
+        ))
+        XCTAssertTrue(fileManager.fileExists(
+            atPath: output.appendingPathComponent("Sources/ImportSensitive/PlainImport.swift").path
+        ))
+        XCTAssertEqual(result.manifest.fileRenames.count, 1)
+        XCTAssertEqual(result.manifest.fileRenames.first?.from, "Sources/Normal/Normal.swift")
+    }
+
     func testFunctionNamesInsideStringLiteralsAreSkipped() throws {
         let input = temporaryRoot.appendingPathComponent("Input")
         let output = temporaryRoot.appendingPathComponent("Output")
@@ -238,6 +279,65 @@ final class ObfuscatorTests: XCTestCase {
             try String(contentsOf: output.appendingPathComponent("URLRequest.swift"), encoding: .utf8),
             try String(contentsOf: source, encoding: .utf8)
         )
+    }
+
+    func testFunctionNamesWithMismatchedCallLabelsAreSkipped() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
+        let source = input.appendingPathComponent("Rule.swift")
+        try """
+        struct Rule {
+            private func diagnose(_ node: Int, type: Int) {}
+
+            private func emitDiagnostic(replace: String, with fixIt: String, on node: Int?) {
+                diagnose("message", on: node)
+            }
+        }
+        """.write(to: source, atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renamePrivateFunctions: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertFalse(result.manifest.functionRenames.contains { $0.from == "diagnose" })
+        XCTAssertTrue(result.manifest.functionRenames.contains { $0.from == "emitDiagnostic" })
+        XCTAssertTrue(result.manifest.skippedFunctions.contains { skipped in
+            skipped.name == "diagnose"
+                && skipped.reason.hasPrefix("call labels do not match private function signature")
+        })
+    }
+
+    func testFunctionNamesWithSameNameCallsInsideTheirOwnBodyAreSkipped() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
+        let source = input.appendingPathComponent("Text.swift")
+        try """
+        extension Text {
+            fileprivate func hasSuffix(_ other: String) -> Bool {
+                self.hasSuffix(other)
+            }
+        }
+        """.write(to: source, atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renamePrivateFunctions: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertFalse(result.manifest.functionRenames.contains { $0.from == "hasSuffix" })
+        XCTAssertTrue(result.manifest.skippedFunctions.contains { skipped in
+            skipped.name == "hasSuffix"
+                && skipped.reason == "same-name call inside function body may resolve to another overload"
+        })
     }
 
     func testSwiftSymlinkTargetsAreNotRenamed() throws {

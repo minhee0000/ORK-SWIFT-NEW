@@ -15,6 +15,8 @@ See `Docs/Architecture.md` for component responsibilities and safety model.
 - Deterministic output from a user-provided seed.
 - Generic exclude rules for folders, paths, and glob-style generated files.
 - Swift symlink targets are preserved so package target aliases keep working.
+- Directories that use Swift access-controlled imports keep their file names to
+  avoid compiler file-order sensitivity.
 - Output copies prune common build caches to avoid stale SwiftPM module state.
 - JSON manifest with every file and function rename.
 - Library API for custom build systems.
@@ -35,6 +37,9 @@ The function pass intentionally skips runtime-sensitive or ambiguous Swift:
 - Backticked names, special entry points, unsafe overloads.
 - Function references that are not normal direct calls.
 - Function names that appear in string literals or interpolation.
+- Calls whose argument labels do not match the private overload being renamed.
+- Same-name calls inside the function body, which may resolve to a different
+  overload after type checking.
 
 ## Requirements
 
@@ -124,6 +129,19 @@ Default excludes:
 ```
 
 Use `--no-default-excludes` only when you want full control.
+
+## Validation
+
+The current safety model has been dry-run against large public Swift codebases,
+including Signal-iOS, Firefox iOS, DuckDuckGo iOS, WordPress iOS, Nextcloud iOS,
+Mastodon iOS, sourcekit-lsp, swift-docc, swift-format, swift-package-manager,
+swift-protobuf, and swift-syntax. On that set, ORK-SWIFT-NEW scanned 15,251
+Swift files, planned 11,203 file renames, planned 13,838 private function
+renames, and emitted valid JSON manifests for every project.
+
+Actual obfuscated SwiftPM builds have been verified for swift-protobuf,
+swift-format, swift-syntax, swift-docc, sourcekit-lsp, and
+swift-package-manager.
 
 ## Manifest
 

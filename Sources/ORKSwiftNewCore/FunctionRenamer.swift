@@ -3,6 +3,8 @@ import Foundation
 struct FunctionCandidate {
     let name: String
     let declarationTokenIndex: Int
+    let parameterLabels: [String]
+    let bodyTokenRange: Range<Int>?
 }
 
 func isSignificant(_ token: Token) -> Bool {
@@ -150,7 +152,20 @@ func findFunctionCandidates(in tokens: [Token]) -> ([FunctionCandidate], [Obfusc
             continue
         }
 
-        candidates.append(FunctionCandidate(name: name, declarationTokenIndex: nameIndex))
+        let parameterBounds = functionParameterListBounds(in: tokens, afterNameIndex: nameIndex)
+        let parameterLabels = parameterBounds.map {
+            declarationParameterLabels(in: tokens, openIndex: $0.open, closeIndex: $0.close)
+        } ?? []
+        let bodyRange = parameterBounds.flatMap {
+            functionBodyRange(in: tokens, afterParameterCloseIndex: $0.close)
+        }
+
+        candidates.append(FunctionCandidate(
+            name: name,
+            declarationTokenIndex: nameIndex,
+            parameterLabels: parameterLabels,
+            bodyTokenRange: bodyRange
+        ))
     }
 
     return (candidates, skipped)
@@ -193,6 +208,39 @@ func isSafeFunctionOccurrence(tokens: [Token], index: Int, declarationIndices: S
     }
 
     return true
+}
+
+func callLabelsMatchCandidateSignatures(tokens: [Token], index: Int, candidates: [FunctionCandidate]) -> Bool {
+    guard let openIndex = nextSignificantIndex(in: tokens, after: index),
+          tokens[openIndex].text == "(",
+          let closeIndex = matchingDelimiterIndex(in: tokens, openIndex: openIndex, open: "(", close: ")")
+    else {
+        return false
+    }
+
+    let labels = callArgumentLabels(in: tokens, openIndex: openIndex, closeIndex: closeIndex)
+    return candidates.contains { $0.parameterLabels == labels }
+}
+
+func sameNameCallInsideOwnBody(tokens: [Token], name: String, candidates: [FunctionCandidate]) -> Int? {
+    let declarationIndices = Set(candidates.map(\.declarationTokenIndex))
+
+    for candidate in candidates {
+        guard let bodyRange = candidate.bodyTokenRange else { continue }
+
+        for index in bodyRange
+            where tokens.indices.contains(index)
+                && tokens[index].kind == .word
+                && tokens[index].text == name
+                && !declarationIndices.contains(index)
+        {
+            if isSafeFunctionOccurrence(tokens: tokens, index: index, declarationIndices: declarationIndices) {
+                return index
+            }
+        }
+    }
+
+    return nil
 }
 
 func transformFunctions(
@@ -244,6 +292,30 @@ func transformFunctions(
                 file: relativeFile,
                 name: name,
                 reason: "identifier occurrence is not a normal direct call; next token: \(nextText)"
+            ))
+            continue
+        }
+
+        let labelMismatch = occurrenceIndices.first {
+            !declarationIndices.contains($0)
+                && !callLabelsMatchCandidateSignatures(tokens: tokens, index: $0, candidates: candidates)
+        }
+
+        if let labelMismatch {
+            let nextText = significantText(tokens, nextSignificantIndex(in: tokens, after: labelMismatch)) ?? "<end>"
+            manifest.skippedFunctions.append(.init(
+                file: relativeFile,
+                name: name,
+                reason: "call labels do not match private function signature; next token: \(nextText)"
+            ))
+            continue
+        }
+
+        if sameNameCallInsideOwnBody(tokens: tokens, name: name, candidates: candidates) != nil {
+            manifest.skippedFunctions.append(.init(
+                file: relativeFile,
+                name: name,
+                reason: "same-name call inside function body may resolve to another overload"
             ))
             continue
         }
