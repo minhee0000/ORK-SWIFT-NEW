@@ -30,7 +30,7 @@ The function pass intentionally skips runtime-sensitive or ambiguous Swift:
 - `public`, `open`, `dynamic`, `override`.
 - Backticked names, special entry points, unsafe overloads.
 - Function references that are not normal direct calls.
-- Suspicious string interpolation usages.
+- Function names that appear in string literals or interpolation.
 
 ## Requirements
 
@@ -116,7 +116,7 @@ Excludes are intentionally generic:
 Default excludes:
 
 ```text
-.build, .git, build, DerivedData, Pods, tmp, *.generated.swift
+.build, .git, build, DerivedData, Pods, Package.swift, Package@swift-*.swift, main.swift, LinuxMain.swift, tmp, *.generated.swift
 ```
 
 Use `--no-default-excludes` only when you want full control.

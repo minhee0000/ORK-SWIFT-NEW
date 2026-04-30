@@ -6,6 +6,10 @@ public let defaultExcludePatterns = [
     "build",
     "DerivedData",
     "Pods",
+    "Package.swift",
+    "Package@swift-*.swift",
+    "main.swift",
+    "LinuxMain.swift",
     "tmp",
     "*.generated.swift"
 ]

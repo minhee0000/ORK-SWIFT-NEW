@@ -169,8 +169,10 @@ func functionDeclarationNameIndices(in tokens: [Token]) -> [String: Set<Int>] {
     return result
 }
 
-func appearsInStringInterpolation(_ name: String, source: String) -> Bool {
-    source.contains("\\(\(name)") || source.contains("\\#(\(name)")
+func appearsInStringLiteral(_ name: String, tokens: [Token]) -> Bool {
+    tokens.contains { token in
+        token.kind == .stringLiteral && token.text.contains(name)
+    }
 }
 
 func isSafeFunctionOccurrence(tokens: [Token], index: Int, declarationIndices: Set<Int>) -> Bool {
@@ -224,11 +226,11 @@ func transformFunctions(
             continue
         }
 
-        if appearsInStringInterpolation(name, source: source) {
+        if appearsInStringLiteral(name, tokens: tokens) {
             manifest.skippedFunctions.append(.init(
                 file: relativeFile,
                 name: name,
-                reason: "identifier appears inside string interpolation"
+                reason: "identifier appears inside a string literal or interpolation"
             ))
             continue
         }

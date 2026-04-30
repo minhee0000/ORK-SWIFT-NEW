@@ -96,6 +96,109 @@ final class ObfuscatorTests: XCTestCase {
         XCTAssertTrue(fileManager.fileExists(atPath: output.appendingPathComponent("Generated/Auto.swift").path))
     }
 
+    func testDefaultExcludesPreservePackageManifest() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        let sources = input.appendingPathComponent("Sources/Library")
+        try fileManager.createDirectory(at: sources, withIntermediateDirectories: true)
+        try "// swift-tools-version: 5.9\n".write(
+            to: input.appendingPathComponent("Package.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "private func internalWork() {}\n".write(
+            to: sources.appendingPathComponent("Library.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameFiles: true,
+            renamePrivateFunctions: true
+        ))
+
+        XCTAssertTrue(fileManager.fileExists(atPath: output.appendingPathComponent("Package.swift").path))
+        XCTAssertEqual(result.manifest.fileRenames.count, 1)
+        XCTAssertFalse(result.manifest.fileRenames.contains { $0.from == "Package.swift" })
+    }
+
+    func testDefaultExcludesPreserveSwiftPMEntrypoints() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        let executable = input.appendingPathComponent("Sources/Tool")
+        try fileManager.createDirectory(at: executable, withIntermediateDirectories: true)
+        try "print(\"hello\")\n".write(
+            to: executable.appendingPathComponent("main.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "private func helper() {}\n".write(
+            to: executable.appendingPathComponent("Helper.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "// XCTest entrypoint\n".write(
+            to: input.appendingPathComponent("LinuxMain.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameFiles: true,
+            renamePrivateFunctions: true
+        ))
+
+        XCTAssertTrue(fileManager.fileExists(atPath: output.appendingPathComponent("Sources/Tool/main.swift").path))
+        XCTAssertTrue(fileManager.fileExists(atPath: output.appendingPathComponent("LinuxMain.swift").path))
+        XCTAssertEqual(result.manifest.fileRenames.count, 1)
+        XCTAssertFalse(result.manifest.fileRenames.contains { $0.from.hasSuffix("main.swift") })
+        XCTAssertFalse(result.manifest.fileRenames.contains { $0.from == "LinuxMain.swift" })
+    }
+
+    func testFunctionNamesInsideStringLiteralsAreSkipped() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
+        let source = input.appendingPathComponent("URLRequest.swift")
+        try """
+        import Foundation
+
+        func render(url: URL) -> String {
+            "\\(url.sortingQueryItems()!.absoluteString)"
+        }
+
+        extension URL {
+            fileprivate func sortingQueryItems() -> URL? {
+                self
+            }
+        }
+        """.write(to: source, atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renamePrivateFunctions: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertEqual(result.manifest.functionRenames.count, 0)
+        XCTAssertTrue(result.manifest.skippedFunctions.contains { skipped in
+            skipped.name == "sortingQueryItems"
+                && skipped.reason == "identifier appears inside a string literal or interpolation"
+        })
+        XCTAssertEqual(
+            try String(contentsOf: output.appendingPathComponent("URLRequest.swift"), encoding: .utf8),
+            try String(contentsOf: source, encoding: .utf8)
+        )
+    }
+
     func testDryRunDoesNotWriteOutputOrModifyInput() throws {
         let input = temporaryRoot.appendingPathComponent("Input")
         try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
