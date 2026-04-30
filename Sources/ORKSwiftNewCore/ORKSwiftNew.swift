@@ -34,7 +34,12 @@ public struct ORKSwiftNew {
                 throw ORKSwiftNewError.invalidConfiguration("Use --output, --in-place, or --dry-run")
             }
             let output = makeURL(outputPath)
-            try copySourceTree(from: input, to: output, fileManager: fileManager)
+            try copySourceTree(
+                from: input,
+                to: output,
+                pruning: options.useDefaultExcludes ? defaultCopyPrunePatterns : [],
+                fileManager: fileManager
+            )
             workingRoot = output
         }
 

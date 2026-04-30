@@ -14,6 +14,14 @@ public let defaultExcludePatterns = [
     "*.generated.swift"
 ]
 
+let defaultCopyPrunePatterns = [
+    ".build",
+    ".git",
+    "build",
+    "DerivedData",
+    "tmp"
+]
+
 public enum ORKSwiftNewError: Error, CustomStringConvertible {
     case invalidConfiguration(String)
     case invalidInput(String)

@@ -15,10 +15,15 @@ struct SwiftFileRenamer {
         manifest: inout ObfuscationManifest
     ) throws {
         let files = swiftFiles(in: root, excluding: filter, fileManager: fileManager)
+        let symlinkTargets = swiftSymlinkTargetPaths(in: root, excluding: filter, fileManager: fileManager)
         var usedByDirectory: [String: Set<String>] = [:]
 
         for file in files {
             let relative = relativePath(from: root, to: file)
+            if symlinkTargets.contains(file.standardizedFileURL.path) {
+                continue
+            }
+
             let directory = file.deletingLastPathComponent()
             let directoryPath = directory.path
             var used = usedByDirectory[directoryPath] ?? Set<String>()

@@ -5,6 +5,8 @@ Production-oriented Swift source obfuscation for Xcode build pipelines.
 The tool works on a copied source tree before `xcodebuild` runs, so the original
 project stays unchanged. It is designed to be reusable across projects by
 combining deterministic generated names with explicit exclude patterns.
+When `--output` is used, common build/cache directories such as `.build`,
+`.git`, `build`, `DerivedData`, and `tmp` are pruned from the copied tree.
 
 See `Docs/Architecture.md` for component responsibilities and safety model.
 
@@ -12,6 +14,8 @@ See `Docs/Architecture.md` for component responsibilities and safety model.
 
 - Deterministic output from a user-provided seed.
 - Generic exclude rules for folders, paths, and glob-style generated files.
+- Swift symlink targets are preserved so package target aliases keep working.
+- Output copies prune common build caches to avoid stale SwiftPM module state.
 - JSON manifest with every file and function rename.
 - Library API for custom build systems.
 - CLI for shell scripts and CI release pipelines.

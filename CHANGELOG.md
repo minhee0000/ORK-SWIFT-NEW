@@ -10,3 +10,5 @@
 - Preserves SwiftPM `Package.swift` manifests by default.
 - Preserves SwiftPM executable/test entrypoint files by default.
 - Skips function renames when the identifier appears in a string literal.
+- Preserves Swift files targeted by symlinks to avoid broken package aliases.
+- Prunes common build/cache folders when creating an output copy.

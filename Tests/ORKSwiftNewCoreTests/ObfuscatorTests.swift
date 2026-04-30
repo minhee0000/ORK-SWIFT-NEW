@@ -96,6 +96,47 @@ final class ObfuscatorTests: XCTestCase {
         XCTAssertTrue(fileManager.fileExists(atPath: output.appendingPathComponent("Generated/Auto.swift").path))
     }
 
+    func testOutputCopyPrunesDefaultBuildArtifacts() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        try fileManager.createDirectory(at: input.appendingPathComponent(".build"), withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: input.appendingPathComponent(".git"), withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: input.appendingPathComponent("build"), withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: input.appendingPathComponent("DerivedData"), withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: input.appendingPathComponent("tmp"), withIntermediateDirectories: true)
+        try "private func normalWork() {}\n".write(
+            to: input.appendingPathComponent("Normal.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "private func cachedWork() {}\n".write(
+            to: input.appendingPathComponent(".build/Cache.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "config\n".write(
+            to: input.appendingPathComponent(".git/config"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameFiles: true,
+            renamePrivateFunctions: true
+        ))
+
+        XCTAssertFalse(fileManager.fileExists(atPath: output.appendingPathComponent(".build").path))
+        XCTAssertFalse(fileManager.fileExists(atPath: output.appendingPathComponent(".git").path))
+        XCTAssertFalse(fileManager.fileExists(atPath: output.appendingPathComponent("build").path))
+        XCTAssertFalse(fileManager.fileExists(atPath: output.appendingPathComponent("DerivedData").path))
+        XCTAssertFalse(fileManager.fileExists(atPath: output.appendingPathComponent("tmp").path))
+        XCTAssertEqual(result.manifest.fileRenames.count, 1)
+        XCTAssertEqual(result.manifest.functionRenames.count, 1)
+    }
+
     func testDefaultExcludesPreservePackageManifest() throws {
         let input = temporaryRoot.appendingPathComponent("Input")
         let output = temporaryRoot.appendingPathComponent("Output")
@@ -197,6 +238,46 @@ final class ObfuscatorTests: XCTestCase {
             try String(contentsOf: output.appendingPathComponent("URLRequest.swift"), encoding: .utf8),
             try String(contentsOf: source, encoding: .utf8)
         )
+    }
+
+    func testSwiftSymlinkTargetsAreNotRenamed() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        let primary = input.appendingPathComponent("Sources/Primary")
+        let secondary = input.appendingPathComponent("Sources/Secondary")
+        try fileManager.createDirectory(at: primary, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: secondary, withIntermediateDirectories: true)
+        try "struct Shared {}\n".write(
+            to: primary.appendingPathComponent("Shared.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "struct Normal {}\n".write(
+            to: primary.appendingPathComponent("Normal.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try fileManager.createSymbolicLink(
+            atPath: secondary.appendingPathComponent("Shared.swift").path,
+            withDestinationPath: "../Primary/Shared.swift"
+        )
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameFiles: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertTrue(fileManager.fileExists(atPath: output.appendingPathComponent("Sources/Primary/Shared.swift").path))
+        XCTAssertTrue(fileManager.fileExists(atPath: output.appendingPathComponent("Sources/Secondary/Shared.swift").path))
+        XCTAssertEqual(
+            try fileManager.destinationOfSymbolicLink(atPath: output.appendingPathComponent("Sources/Secondary/Shared.swift").path),
+            "../Primary/Shared.swift"
+        )
+        XCTAssertEqual(result.manifest.fileRenames.count, 1)
+        XCTAssertEqual(result.manifest.fileRenames.first?.from, "Sources/Primary/Normal.swift")
     }
 
     func testDryRunDoesNotWriteOutputOrModifyInput() throws {
