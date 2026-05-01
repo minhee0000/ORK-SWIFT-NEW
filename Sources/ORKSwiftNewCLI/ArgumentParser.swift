@@ -44,6 +44,10 @@ struct ArgumentParser {
                 options.renamePrivateFunctions = true
             case "--rename-types":
                 options.renameTypes = true
+            case "--rename-ci-metal-files":
+                options.renameCIMetalFiles = true
+            case "--merge-ci-metal-files":
+                options.mergeCIMetalFiles = true
             case "--quiet":
                 options.quiet = true
             case "--verbose":
@@ -77,6 +81,8 @@ struct ArgumentParser {
           --rename-directories         Rename Swift-only source directories in the working source tree.
           --rename-private-functions   Rename safe private/fileprivate Swift function declarations and local call sites.
           --rename-types               Rename safe internal/private Swift struct/class/enum/actor names and references.
+          --rename-ci-metal-files      Rename .ci.metal files, Core Image kernel functions, and matching Swift string literals.
+          --merge-ci-metal-files       Merge Core Image .ci.metal files into one obfuscated Release library source.
           --exclude <pattern>          Skip matching files/directories. Repeat for multiple paths.
                                        Plain names match any path component; glob patterns match relative paths.
           --no-default-excludes        Disable built-in excludes: \(defaultExcludePatterns.joined(separator: ", ")).

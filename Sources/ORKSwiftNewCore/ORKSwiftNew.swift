@@ -82,6 +82,17 @@ public struct ORKSwiftNew {
             )
         }
 
+        if options.renameCIMetalFiles || options.mergeCIMetalFiles {
+            try CIMetalFileRenamer(fileManager: fileManager).rename(
+                in: workingRoot,
+                seed: options.seed,
+                filter: pathFilter,
+                dryRun: options.dryRun,
+                mergeIntoSingle: options.mergeCIMetalFiles,
+                manifest: &manifest
+            )
+        }
+
         if options.renameDirectories {
             try SwiftDirectoryRenamer(fileManager: fileManager).rename(
                 in: workingRoot,
@@ -102,6 +113,9 @@ public struct ORKSwiftNew {
             skippedFunctions: manifest.skippedFunctions.count,
             typeRenames: manifest.typeRenames.count,
             skippedTypes: manifest.skippedTypes.count,
+            ciMetalFileRenames: manifest.ciMetalFileRenames.count,
+            ciMetalFunctionRenames: manifest.ciMetalFunctionRenames.count,
+            ciMetalMergedFiles: manifest.ciMetalMergedFile == nil ? 0 : 1,
             output: outputDescription,
             excludedPatterns: excludePatterns
         )
@@ -110,9 +124,9 @@ public struct ORKSwiftNew {
     }
 
     private func validate(_ options: ObfuscationOptions) throws {
-        guard options.renameFiles || options.renameDirectories || options.renamePrivateFunctions || options.renameTypes else {
+        guard options.renameFiles || options.renameDirectories || options.renamePrivateFunctions || options.renameTypes || options.renameCIMetalFiles || options.mergeCIMetalFiles else {
             throw ORKSwiftNewError.invalidConfiguration(
-                "Select at least one transform: --rename-files, --rename-directories, --rename-private-functions, or --rename-types"
+                "Select at least one transform: --rename-files, --rename-directories, --rename-private-functions, --rename-types, --rename-ci-metal-files, or --merge-ci-metal-files"
             )
         }
 

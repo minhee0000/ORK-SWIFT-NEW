@@ -70,6 +70,127 @@ final class ObfuscatorTests: XCTestCase {
         XCTAssertTrue(transformed.contains("func f_"))
     }
 
+    func testRenamesCIMetalFilesAndLoaderStringLiterals() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        let filters = input.appendingPathComponent("Filters")
+        try fileManager.createDirectory(at: filters, withIntermediateDirectories: true)
+
+        let shader = filters.appendingPathComponent("DetailBlurShader.ci.metal")
+        try "kernel void detailBlur() {}\n".write(to: shader, atomically: true, encoding: .utf8)
+
+        let source = input.appendingPathComponent("Loader.swift")
+        try """
+        enum Demo {
+            static func load() {
+                _ = CIMetalLibraryLoader.url(named: "DetailBlurShader")
+                _ = CIKernel(functionName: "detailBlur", fromMetalLibraryData: Data())
+                _ = ["DetailBlurShader", "default"]
+            }
+        }
+        """.write(to: source, atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(
+            fileManager: fileManager,
+            dateProvider: { Date(timeIntervalSince1970: 0) }
+        ).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameCIMetalFiles: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertEqual(result.manifest.ciMetalFileRenames.count, 1)
+        XCTAssertEqual(result.manifest.ciMetalFunctionRenames.count, 1)
+        let rename = try XCTUnwrap(result.manifest.ciMetalFileRenames.first)
+        let functionRename = try XCTUnwrap(result.manifest.ciMetalFunctionRenames.first)
+        XCTAssertEqual(rename.from, "Filters/DetailBlurShader.ci.metal")
+        XCTAssertTrue(rename.to.hasPrefix("Filters/R_"))
+        XCTAssertTrue(rename.to.hasSuffix(".ci.metal"))
+        XCTAssertEqual(functionRename.file, "Filters/DetailBlurShader.ci.metal")
+        XCTAssertEqual(functionRename.from, "detailBlur")
+        XCTAssertTrue(functionRename.to.hasPrefix("r_"))
+        XCTAssertFalse(fileManager.fileExists(atPath: output.appendingPathComponent("Filters/DetailBlurShader.ci.metal").path))
+        XCTAssertTrue(fileManager.fileExists(atPath: output.appendingPathComponent(rename.to).path))
+
+        let transformed = try String(contentsOf: output.appendingPathComponent("Loader.swift"), encoding: .utf8)
+        let newLoaderName = URL(fileURLWithPath: rename.to).lastPathComponent
+            .replacingOccurrences(of: ".ci.metal", with: "")
+        XCTAssertFalse(transformed.contains("DetailBlurShader"))
+        XCTAssertFalse(transformed.contains("detailBlur"))
+        XCTAssertTrue(transformed.contains("\"\(newLoaderName)\""))
+        XCTAssertTrue(transformed.contains("\"\(functionRename.to)\""))
+        XCTAssertTrue(transformed.contains("\"default\""))
+
+        let transformedShader = try String(contentsOf: output.appendingPathComponent(rename.to), encoding: .utf8)
+        XCTAssertFalse(transformedShader.contains("detailBlur"))
+        XCTAssertTrue(transformedShader.contains("kernel void \(functionRename.to)()"))
+    }
+
+    func testMergesCIMetalFilesIntoSingleGeneratedSource() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        let filters = input.appendingPathComponent("Filters")
+        try fileManager.createDirectory(at: filters, withIntermediateDirectories: true)
+
+        try """
+        extern "C" {
+            float4 detailBlur(sampler input) { return sample(input, input.coord()); }
+        }
+        """.write(to: filters.appendingPathComponent("DetailBlurShader.ci.metal"), atomically: true, encoding: .utf8)
+        try """
+        extern "C" {
+            float4 darkCornerBlend(sampler input) { return sample(input, input.coord()); }
+        }
+        """.write(to: filters.appendingPathComponent("DarkCornerBlendShader.ci.metal"), atomically: true, encoding: .utf8)
+
+        try """
+        enum Demo {
+            static func load() {
+                _ = CIMetalLibraryLoader.url(named: "DetailBlurShader")
+                _ = CIMetalLibraryLoader.url(named: "DarkCornerBlendShader")
+                _ = CIKernel(functionName: "detailBlur", fromMetalLibraryData: Data())
+                _ = CIKernel(functionName: "darkCornerBlend", fromMetalLibraryData: Data())
+            }
+        }
+        """.write(to: input.appendingPathComponent("Loader.swift"), atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(
+            fileManager: fileManager,
+            dateProvider: { Date(timeIntervalSince1970: 0) }
+        ).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameCIMetalFiles: true,
+            mergeCIMetalFiles: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertEqual(result.manifest.ciMetalFileRenames.count, 2)
+        XCTAssertEqual(result.manifest.ciMetalFunctionRenames.count, 2)
+        let mergedRelative = try XCTUnwrap(result.manifest.ciMetalMergedFile)
+        XCTAssertTrue(mergedRelative.hasPrefix("R_"))
+        XCTAssertTrue(mergedRelative.hasSuffix(".ci.metal"))
+
+        let ciMetalFiles = try fileManager.contentsOfDirectory(
+            at: output,
+            includingPropertiesForKeys: nil
+        ).filter { $0.lastPathComponent.hasSuffix(".ci.metal") }
+        XCTAssertEqual(ciMetalFiles.map(\.lastPathComponent), [URL(fileURLWithPath: mergedRelative).lastPathComponent])
+
+        let mergedName = URL(fileURLWithPath: mergedRelative).lastPathComponent
+            .replacingOccurrences(of: ".ci.metal", with: "")
+        let transformed = try String(contentsOf: output.appendingPathComponent("Loader.swift"), encoding: .utf8)
+        XCTAssertFalse(transformed.contains("DetailBlurShader"))
+        XCTAssertFalse(transformed.contains("DarkCornerBlendShader"))
+        XCTAssertFalse(transformed.contains("detailBlur"))
+        XCTAssertFalse(transformed.contains("darkCornerBlend"))
+        XCTAssertEqual(transformed.components(separatedBy: "\"\(mergedName)\"").count - 1, 2)
+        XCTAssertEqual(result.summary.ciMetalMergedFiles, 1)
+    }
+
     func testExcludedDirectoriesAreCopiedButNotTransformed() throws {
         let input = temporaryRoot.appendingPathComponent("Input")
         let output = temporaryRoot.appendingPathComponent("Output")

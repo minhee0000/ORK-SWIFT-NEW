@@ -14,6 +14,8 @@ struct CLIOptions {
     var renameDirectories = false
     var renamePrivateFunctions = false
     var renameTypes = false
+    var renameCIMetalFiles = false
+    var mergeCIMetalFiles = false
     var useDefaultExcludes = true
     var excludePatterns: [String] = []
     var verbose = false
@@ -31,6 +33,8 @@ struct CLIOptions {
             renameDirectories: renameDirectories,
             renamePrivateFunctions: renamePrivateFunctions,
             renameTypes: renameTypes,
+            renameCIMetalFiles: renameCIMetalFiles,
+            mergeCIMetalFiles: mergeCIMetalFiles,
             useDefaultExcludes: useDefaultExcludes,
             excludePatterns: excludePatterns
         )

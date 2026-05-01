@@ -45,6 +45,8 @@ public struct ObfuscationOptions {
     public var renameDirectories: Bool
     public var renamePrivateFunctions: Bool
     public var renameTypes: Bool
+    public var renameCIMetalFiles: Bool
+    public var mergeCIMetalFiles: Bool
     public var useDefaultExcludes: Bool
     public var excludePatterns: [String]
 
@@ -59,6 +61,8 @@ public struct ObfuscationOptions {
         renameDirectories: Bool = false,
         renamePrivateFunctions: Bool = false,
         renameTypes: Bool = false,
+        renameCIMetalFiles: Bool = false,
+        mergeCIMetalFiles: Bool = false,
         useDefaultExcludes: Bool = true,
         excludePatterns: [String] = []
     ) {
@@ -72,6 +76,8 @@ public struct ObfuscationOptions {
         self.renameDirectories = renameDirectories
         self.renamePrivateFunctions = renamePrivateFunctions
         self.renameTypes = renameTypes
+        self.renameCIMetalFiles = renameCIMetalFiles
+        self.mergeCIMetalFiles = mergeCIMetalFiles
         self.useDefaultExcludes = useDefaultExcludes
         self.excludePatterns = excludePatterns
     }
@@ -159,6 +165,9 @@ public struct ObfuscationManifest: Codable, Equatable {
     public var skippedFunctions: [SkippedFunction]
     public var typeRenames: [TypeRename]
     public var skippedTypes: [SkippedType]
+    public var ciMetalFileRenames: [FileRename]
+    public var ciMetalFunctionRenames: [FunctionRename]
+    public var ciMetalMergedFile: String?
 
     public init(
         generatedAt: String,
@@ -171,7 +180,10 @@ public struct ObfuscationManifest: Codable, Equatable {
         functionRenames: [FunctionRename] = [],
         skippedFunctions: [SkippedFunction] = [],
         typeRenames: [TypeRename] = [],
-        skippedTypes: [SkippedType] = []
+        skippedTypes: [SkippedType] = [],
+        ciMetalFileRenames: [FileRename] = [],
+        ciMetalFunctionRenames: [FunctionRename] = [],
+        ciMetalMergedFile: String? = nil
     ) {
         self.generatedAt = generatedAt
         self.seed = seed
@@ -184,6 +196,9 @@ public struct ObfuscationManifest: Codable, Equatable {
         self.skippedFunctions = skippedFunctions
         self.typeRenames = typeRenames
         self.skippedTypes = skippedTypes
+        self.ciMetalFileRenames = ciMetalFileRenames
+        self.ciMetalFunctionRenames = ciMetalFunctionRenames
+        self.ciMetalMergedFile = ciMetalMergedFile
     }
 }
 
@@ -195,6 +210,9 @@ public struct ObfuscationSummary: Equatable {
     public let skippedFunctions: Int
     public let typeRenames: Int
     public let skippedTypes: Int
+    public let ciMetalFileRenames: Int
+    public let ciMetalFunctionRenames: Int
+    public let ciMetalMergedFiles: Int
     public let output: String
     public let excludedPatterns: [String]
 
@@ -206,6 +224,9 @@ public struct ObfuscationSummary: Equatable {
         skippedFunctions: Int,
         typeRenames: Int,
         skippedTypes: Int,
+        ciMetalFileRenames: Int,
+        ciMetalFunctionRenames: Int,
+        ciMetalMergedFiles: Int,
         output: String,
         excludedPatterns: [String]
     ) {
@@ -216,6 +237,9 @@ public struct ObfuscationSummary: Equatable {
         self.skippedFunctions = skippedFunctions
         self.typeRenames = typeRenames
         self.skippedTypes = skippedTypes
+        self.ciMetalFileRenames = ciMetalFileRenames
+        self.ciMetalFunctionRenames = ciMetalFunctionRenames
+        self.ciMetalMergedFiles = ciMetalMergedFiles
         self.output = output
         self.excludedPatterns = excludedPatterns
     }
