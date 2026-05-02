@@ -128,6 +128,334 @@ final class ObfuscatorTests: XCTestCase {
         XCTAssertTrue(transformedShader.contains("kernel void \(functionRename.to)()"))
     }
 
+    func testObfuscatesGeneratedAssetCasesAndReferences() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        let generated = input.appendingPathComponent("Generated")
+        let feature = input.appendingPathComponent("Feature")
+        try fileManager.createDirectory(at: generated, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: feature, withIntermediateDirectories: true)
+
+        try """
+        enum ProtectedAssetKey: CaseIterable {
+            case primaryTexture
+            case noiseOverlay
+            case accentIcon
+        }
+
+        enum AssetTable {
+            static func value(_ key: ProtectedAssetKey) -> String {
+                switch key {
+                case .primaryTexture: return "masked"
+                case .noiseOverlay: return "masked"
+                case .accentIcon: return "masked"
+                }
+            }
+        }
+        """.write(to: generated.appendingPathComponent("ProtectedAssets.generated.swift"), atomically: true, encoding: .utf8)
+
+        try """
+        enum AssetUsageCatalog {
+            static let texture = AssetCatalog.string(.primaryTexture)
+            static let overlay = AssetCatalog.string(.noiseOverlay)
+            static let textureRef = AssetCatalog.ref(.primaryTexture)
+            static let protectedIcon = AssetCatalog.string(.accentIcon)
+            static let uiIcon = FeatureKind.accentIcon
+
+            static func run(config: FeatureConfig, feature: FeatureKind) {
+                _ = config.accentIcon
+                switch feature {
+                case .accentIcon:
+                    break
+                }
+            }
+        }
+
+        struct FeatureConfig {
+            var accentIcon: Int
+        }
+
+        enum FeatureKind {
+            case accentIcon
+        }
+        """.write(to: feature.appendingPathComponent("AssetUsageCatalog.swift"), atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            obfuscateAssetCases: true,
+            assetCaseEnumPath: "Generated/ProtectedAssets.generated.swift",
+            assetCaseEnumName: "ProtectedAssetKey",
+            assetCaseReceiverName: "AssetCatalog",
+            assetCaseMethods: ["string", "ref"]
+        ))
+
+        XCTAssertEqual(result.manifest.assetCaseRenames.count, 3)
+        XCTAssertEqual(result.summary.assetCaseRenames, 3)
+        let generatedSource = try String(
+            contentsOf: output.appendingPathComponent("Generated/ProtectedAssets.generated.swift"),
+            encoding: .utf8
+        )
+        let catalog = try String(
+            contentsOf: output.appendingPathComponent("Feature/AssetUsageCatalog.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(generatedSource.contains("primaryTexture"))
+        XCTAssertFalse(generatedSource.contains("noiseOverlay"))
+        XCTAssertFalse(catalog.contains("primaryTexture"))
+        XCTAssertFalse(catalog.contains("noiseOverlay"))
+        XCTAssertTrue(generatedSource.contains("case c_"))
+        XCTAssertTrue(catalog.contains(".c_"))
+        XCTAssertTrue(catalog.contains("FeatureKind.accentIcon"))
+        XCTAssertTrue(catalog.contains("config.accentIcon"))
+        XCTAssertTrue(catalog.contains("case .accentIcon:"))
+    }
+
+    func testObfuscatesAllowlistedSecurityStrings() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
+
+        try """
+        import Foundation
+
+        enum SecurityDemo {
+            static let frame = Data("Sample.asset-frame.v1".utf8)
+            static let queue = DispatchQueue(label: "com.example.product.secure.queue")
+            static let visible = "leave-me"
+        }
+        """.write(to: input.appendingPathComponent("SecurityDemo.swift"), atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            securityStrings: [
+                "Sample.asset-frame.v1",
+                "com.example.product.secure.queue",
+            ],
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertEqual(result.summary.securityStringObfuscations, 2)
+        let transformed = try String(contentsOf: output.appendingPathComponent("SecurityDemo.swift"), encoding: .utf8)
+        XCTAssertFalse(transformed.contains("Sample.asset-frame.v1"))
+        XCTAssertFalse(transformed.contains("com.example.product.secure.queue"))
+        XCTAssertTrue(transformed.contains("R0E.decode"))
+        XCTAssertTrue(transformed.contains("\"leave-me\""))
+    }
+
+    func testRenamesSafeEnumCasesAndReferences() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
+
+        try """
+        enum FilterStep {
+            case gcColorLookup(name: String)
+            case detailBlur
+            case overlay(String)
+        }
+
+        enum Decoration {
+            case overlay
+        }
+
+        enum PersistedMode: String {
+            case gcColorLookup
+        }
+
+        struct Demo {
+            var pipelineSteps: [FilterStep] = []
+
+            func run(step: FilterStep, decoration: Decoration, renderer: Renderer) {
+                let steps: [FilterStep] = [
+                    .gcColorLookup(name: "lut"),
+                    .detailBlur,
+                    .overlay("safe")
+                ]
+                let aliasSteps = pipelineSteps
+                for loopStep in aliasSteps {
+                    switch loopStep {
+                    case .detailBlur:
+                        break
+                    default:
+                        break
+                    }
+                }
+                _ = FilterStep.gcColorLookup(name: "lut")
+                switch step {
+                case .gcColorLookup:
+                    break
+                case .detailBlur:
+                    break
+                case .overlay:
+                    break
+                }
+                switch decoration {
+                case .overlay:
+                    break
+                }
+                _ = renderer.gcColorLookup()
+                _ = renderer.detailBlur()
+                _ = PersistedMode.gcColorLookup
+                _ = steps
+            }
+        }
+
+        struct Renderer {
+            func gcColorLookup() -> Int { 1 }
+            func detailBlur() -> Int { 1 }
+        }
+        """.write(to: input.appendingPathComponent("Demo.swift"), atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameEnumCases: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertEqual(result.summary.enumCaseRenames, 1)
+        XCTAssertTrue(result.manifest.enumCaseRenames.contains { $0.from == "detailBlur" })
+        XCTAssertTrue(result.manifest.skippedEnumCases.contains { $0.name == "overlay" })
+        XCTAssertTrue(result.manifest.skippedEnumCases.contains { $0.enumName == "PersistedMode" && $0.name == "gcColorLookup" })
+
+        let transformed = try String(contentsOf: output.appendingPathComponent("Demo.swift"), encoding: .utf8)
+        XCTAssertFalse(transformed.contains("case detailBlur"))
+        XCTAssertFalse(transformed.contains("case .detailBlur"))
+        XCTAssertTrue(transformed.contains("case e_"))
+        XCTAssertTrue(transformed.contains(".e_"))
+        XCTAssertTrue(transformed.contains("case gcColorLookup(name: String)"))
+        XCTAssertTrue(transformed.contains("PersistedMode.gcColorLookup"))
+        XCTAssertTrue(transformed.contains("renderer.gcColorLookup()"))
+        XCTAssertTrue(transformed.contains("renderer.detailBlur()"))
+        XCTAssertTrue(transformed.contains("case overlay"))
+        XCTAssertTrue(transformed.contains(".overlay(\"safe\")"))
+    }
+
+    func testRenamesEnumCasesInMemberSwitchesAndComputedReturns() throws {
+        let input = temporaryRoot.appendingPathComponent("Input")
+        let output = temporaryRoot.appendingPathComponent("Output")
+        try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
+
+        try """
+        enum FillMode {
+            case scaleToFill
+            case stretchToFill
+            case tile
+        }
+
+        struct Overlay {
+            let fillMode: FillMode
+        }
+
+        enum SessionState {
+            case inactive
+            case photoPreview
+            case recording
+        }
+
+        enum CaptureMode {
+            case photo
+            case video
+        }
+
+        enum TimerMode {
+            case off
+            case seconds3
+        }
+
+        struct FeatureState {
+            var timerMode: TimerMode = .off
+        }
+
+        struct Demo {
+            var captureMode: CaptureMode = .photo
+            var isActive = false
+            var state = FeatureState()
+
+            func loadEffect(_ overlay: Overlay) -> Int {
+                switch overlay.fillMode {
+                case .scaleToFill:
+                    return 0
+                case .stretchToFill:
+                    return 1
+                case .tile:
+                    return 2
+                }
+            }
+
+            var desiredState: SessionState {
+                guard isActive else { return .inactive }
+                switch captureMode {
+                case .photo: return .photoPreview
+                case .video: return .recording
+                }
+            }
+
+            func timerText() -> String {
+                let mode = state.timerMode
+                switch mode {
+                case .off: return "off"
+                case .seconds3: return "3"
+                }
+            }
+        }
+        """.write(to: input.appendingPathComponent("Demo.swift"), atomically: true, encoding: .utf8)
+
+        try """
+        enum CrossFileMode {
+            case first
+            case second
+        }
+
+        struct CrossFileStore {
+            var crossFileMode: CrossFileMode = .first
+        }
+        """.write(to: input.appendingPathComponent("Types.swift"), atomically: true, encoding: .utf8)
+
+        try """
+        struct CrossFileView {
+            var store = CrossFileStore()
+
+            func text() -> String {
+                let mode = store.crossFileMode
+                switch mode {
+                case .first: return "first"
+                case .second: return "second"
+                }
+            }
+        }
+        """.write(to: input.appendingPathComponent("View.swift"), atomically: true, encoding: .utf8)
+
+        let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
+            inputPath: input.path,
+            outputPath: output.path,
+            seed: "unit-test",
+            renameEnumCases: true,
+            useDefaultExcludes: false
+        ))
+
+        XCTAssertEqual(result.summary.enumCaseRenames, 12)
+
+        let transformed = try String(contentsOf: output.appendingPathComponent("Demo.swift"), encoding: .utf8)
+        let transformedView = try String(contentsOf: output.appendingPathComponent("View.swift"), encoding: .utf8)
+        XCTAssertFalse(transformed.contains("case scaleToFill"))
+        XCTAssertFalse(transformed.contains("case stretchToFill"))
+        XCTAssertFalse(transformed.contains("case tile"))
+        XCTAssertFalse(transformed.contains("case inactive"))
+        XCTAssertFalse(transformed.contains("case photoPreview"))
+        XCTAssertFalse(transformed.contains("case seconds3"))
+        XCTAssertFalse(transformed.contains("case .stretchToFill"))
+        XCTAssertFalse(transformed.contains("return .inactive"))
+        XCTAssertFalse(transformed.contains("case .seconds3"))
+        XCTAssertFalse(transformedView.contains("case .second"))
+    }
+
     func testMergesCIMetalFilesIntoSingleGeneratedSource() throws {
         let input = temporaryRoot.appendingPathComponent("Input")
         let output = temporaryRoot.appendingPathComponent("Output")

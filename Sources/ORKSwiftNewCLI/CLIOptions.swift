@@ -14,8 +14,15 @@ struct CLIOptions {
     var renameDirectories = false
     var renamePrivateFunctions = false
     var renameTypes = false
+    var renameEnumCases = false
+    var obfuscateAssetCases = false
+    var assetCaseEnumPath: String?
+    var assetCaseEnumName: String?
+    var assetCaseReceiverName: String?
+    var assetCaseMethods: [String] = []
     var renameCIMetalFiles = false
     var mergeCIMetalFiles = false
+    var securityStrings: [String] = []
     var useDefaultExcludes = true
     var excludePatterns: [String] = []
     var verbose = false
@@ -33,8 +40,15 @@ struct CLIOptions {
             renameDirectories: renameDirectories,
             renamePrivateFunctions: renamePrivateFunctions,
             renameTypes: renameTypes,
+            renameEnumCases: renameEnumCases,
+            obfuscateAssetCases: obfuscateAssetCases,
+            assetCaseEnumPath: assetCaseEnumPath,
+            assetCaseEnumName: assetCaseEnumName,
+            assetCaseReceiverName: assetCaseReceiverName,
+            assetCaseMethods: assetCaseMethods,
             renameCIMetalFiles: renameCIMetalFiles,
             mergeCIMetalFiles: mergeCIMetalFiles,
+            securityStrings: securityStrings,
             useDefaultExcludes: useDefaultExcludes,
             excludePatterns: excludePatterns
         )

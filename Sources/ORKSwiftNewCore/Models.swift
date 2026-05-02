@@ -45,8 +45,15 @@ public struct ObfuscationOptions {
     public var renameDirectories: Bool
     public var renamePrivateFunctions: Bool
     public var renameTypes: Bool
+    public var renameEnumCases: Bool
+    public var obfuscateAssetCases: Bool
+    public var assetCaseEnumPath: String?
+    public var assetCaseEnumName: String?
+    public var assetCaseReceiverName: String?
+    public var assetCaseMethods: [String]
     public var renameCIMetalFiles: Bool
     public var mergeCIMetalFiles: Bool
+    public var securityStrings: [String]
     public var useDefaultExcludes: Bool
     public var excludePatterns: [String]
 
@@ -61,8 +68,15 @@ public struct ObfuscationOptions {
         renameDirectories: Bool = false,
         renamePrivateFunctions: Bool = false,
         renameTypes: Bool = false,
+        renameEnumCases: Bool = false,
+        obfuscateAssetCases: Bool = false,
+        assetCaseEnumPath: String? = nil,
+        assetCaseEnumName: String? = nil,
+        assetCaseReceiverName: String? = nil,
+        assetCaseMethods: [String] = [],
         renameCIMetalFiles: Bool = false,
         mergeCIMetalFiles: Bool = false,
+        securityStrings: [String] = [],
         useDefaultExcludes: Bool = true,
         excludePatterns: [String] = []
     ) {
@@ -76,8 +90,15 @@ public struct ObfuscationOptions {
         self.renameDirectories = renameDirectories
         self.renamePrivateFunctions = renamePrivateFunctions
         self.renameTypes = renameTypes
+        self.renameEnumCases = renameEnumCases
+        self.obfuscateAssetCases = obfuscateAssetCases
+        self.assetCaseEnumPath = assetCaseEnumPath
+        self.assetCaseEnumName = assetCaseEnumName
+        self.assetCaseReceiverName = assetCaseReceiverName
+        self.assetCaseMethods = assetCaseMethods
         self.renameCIMetalFiles = renameCIMetalFiles
         self.mergeCIMetalFiles = mergeCIMetalFiles
+        self.securityStrings = securityStrings
         self.useDefaultExcludes = useDefaultExcludes
         self.excludePatterns = excludePatterns
     }
@@ -154,6 +175,60 @@ public struct ObfuscationManifest: Codable, Equatable {
         }
     }
 
+    public struct EnumCaseRename: Codable, Equatable {
+        public let file: String
+        public let enumName: String
+        public let from: String
+        public let to: String
+
+        public init(file: String, enumName: String, from: String, to: String) {
+            self.file = file
+            self.enumName = enumName
+            self.from = from
+            self.to = to
+        }
+    }
+
+    public struct SkippedEnumCase: Codable, Equatable {
+        public let file: String
+        public let enumName: String
+        public let name: String
+        public let reason: String
+
+        public init(file: String, enumName: String, name: String, reason: String) {
+            self.file = file
+            self.enumName = enumName
+            self.name = name
+            self.reason = reason
+        }
+    }
+
+    public struct AssetCaseRename: Codable, Equatable {
+        public let file: String
+        public let enumName: String
+        public let from: String
+        public let to: String
+
+        public init(file: String, enumName: String, from: String, to: String) {
+            self.file = file
+            self.enumName = enumName
+            self.from = from
+            self.to = to
+        }
+    }
+
+    public struct SecurityStringObfuscation: Codable, Equatable {
+        public let file: String
+        public let digest: String
+        public let count: Int
+
+        public init(file: String, digest: String, count: Int) {
+            self.file = file
+            self.digest = digest
+            self.count = count
+        }
+    }
+
     public let generatedAt: String
     public let seed: String
     public let input: String
@@ -165,6 +240,10 @@ public struct ObfuscationManifest: Codable, Equatable {
     public var skippedFunctions: [SkippedFunction]
     public var typeRenames: [TypeRename]
     public var skippedTypes: [SkippedType]
+    public var enumCaseRenames: [EnumCaseRename]
+    public var skippedEnumCases: [SkippedEnumCase]
+    public var assetCaseRenames: [AssetCaseRename]
+    public var securityStringObfuscations: [SecurityStringObfuscation]
     public var ciMetalFileRenames: [FileRename]
     public var ciMetalFunctionRenames: [FunctionRename]
     public var ciMetalMergedFile: String?
@@ -181,6 +260,10 @@ public struct ObfuscationManifest: Codable, Equatable {
         skippedFunctions: [SkippedFunction] = [],
         typeRenames: [TypeRename] = [],
         skippedTypes: [SkippedType] = [],
+        enumCaseRenames: [EnumCaseRename] = [],
+        skippedEnumCases: [SkippedEnumCase] = [],
+        assetCaseRenames: [AssetCaseRename] = [],
+        securityStringObfuscations: [SecurityStringObfuscation] = [],
         ciMetalFileRenames: [FileRename] = [],
         ciMetalFunctionRenames: [FunctionRename] = [],
         ciMetalMergedFile: String? = nil
@@ -196,6 +279,10 @@ public struct ObfuscationManifest: Codable, Equatable {
         self.skippedFunctions = skippedFunctions
         self.typeRenames = typeRenames
         self.skippedTypes = skippedTypes
+        self.enumCaseRenames = enumCaseRenames
+        self.skippedEnumCases = skippedEnumCases
+        self.assetCaseRenames = assetCaseRenames
+        self.securityStringObfuscations = securityStringObfuscations
         self.ciMetalFileRenames = ciMetalFileRenames
         self.ciMetalFunctionRenames = ciMetalFunctionRenames
         self.ciMetalMergedFile = ciMetalMergedFile
@@ -210,6 +297,10 @@ public struct ObfuscationSummary: Equatable {
     public let skippedFunctions: Int
     public let typeRenames: Int
     public let skippedTypes: Int
+    public let enumCaseRenames: Int
+    public let skippedEnumCases: Int
+    public let assetCaseRenames: Int
+    public let securityStringObfuscations: Int
     public let ciMetalFileRenames: Int
     public let ciMetalFunctionRenames: Int
     public let ciMetalMergedFiles: Int
@@ -224,6 +315,10 @@ public struct ObfuscationSummary: Equatable {
         skippedFunctions: Int,
         typeRenames: Int,
         skippedTypes: Int,
+        enumCaseRenames: Int,
+        skippedEnumCases: Int,
+        assetCaseRenames: Int,
+        securityStringObfuscations: Int,
         ciMetalFileRenames: Int,
         ciMetalFunctionRenames: Int,
         ciMetalMergedFiles: Int,
@@ -237,6 +332,10 @@ public struct ObfuscationSummary: Equatable {
         self.skippedFunctions = skippedFunctions
         self.typeRenames = typeRenames
         self.skippedTypes = skippedTypes
+        self.enumCaseRenames = enumCaseRenames
+        self.skippedEnumCases = skippedEnumCases
+        self.assetCaseRenames = assetCaseRenames
+        self.securityStringObfuscations = securityStringObfuscations
         self.ciMetalFileRenames = ciMetalFileRenames
         self.ciMetalFunctionRenames = ciMetalFunctionRenames
         self.ciMetalMergedFiles = ciMetalMergedFiles

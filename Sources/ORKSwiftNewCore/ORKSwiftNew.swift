@@ -62,6 +62,37 @@ public struct ORKSwiftNew {
             )
         }
 
+        if options.renameEnumCases {
+            try SourceEnumCaseTransformer(fileManager: fileManager).transform(
+                in: workingRoot,
+                seed: options.seed,
+                filter: pathFilter,
+                dryRun: options.dryRun,
+                manifest: &manifest
+            )
+        }
+
+        if options.obfuscateAssetCases {
+            guard let assetCaseEnumPath = options.assetCaseEnumPath,
+                  let assetCaseEnumName = options.assetCaseEnumName,
+                  let assetCaseReceiverName = options.assetCaseReceiverName else {
+                throw ORKSwiftNewError.invalidConfiguration(
+                    "--obfuscate-asset-cases requires --asset-case-enum-path, --asset-case-enum-name, --asset-case-receiver, and at least one --asset-case-method"
+                )
+            }
+            try AssetCaseReferenceRewriter(fileManager: fileManager).rewrite(
+                in: workingRoot,
+                seed: options.seed,
+                enumRelativePath: assetCaseEnumPath,
+                enumName: assetCaseEnumName,
+                receiverName: assetCaseReceiverName,
+                methodNames: Set(options.assetCaseMethods),
+                filter: pathFilter,
+                dryRun: options.dryRun,
+                manifest: &manifest
+            )
+        }
+
         if options.renamePrivateFunctions {
             try SourceFunctionTransformer(fileManager: fileManager).transform(
                 in: workingRoot,
@@ -103,6 +134,17 @@ public struct ORKSwiftNew {
             )
         }
 
+        if !options.securityStrings.isEmpty {
+            try SecurityStringObfuscator(fileManager: fileManager).transform(
+                in: workingRoot,
+                seed: options.seed,
+                values: options.securityStrings,
+                filter: pathFilter,
+                dryRun: options.dryRun,
+                manifest: &manifest
+            )
+        }
+
         try manifestWriter.write(manifest, to: options.manifestPath)
 
         let summary = ObfuscationSummary(
@@ -113,6 +155,10 @@ public struct ORKSwiftNew {
             skippedFunctions: manifest.skippedFunctions.count,
             typeRenames: manifest.typeRenames.count,
             skippedTypes: manifest.skippedTypes.count,
+            enumCaseRenames: manifest.enumCaseRenames.count,
+            skippedEnumCases: manifest.skippedEnumCases.count,
+            assetCaseRenames: manifest.assetCaseRenames.count,
+            securityStringObfuscations: manifest.securityStringObfuscations.reduce(0) { $0 + $1.count },
             ciMetalFileRenames: manifest.ciMetalFileRenames.count,
             ciMetalFunctionRenames: manifest.ciMetalFunctionRenames.count,
             ciMetalMergedFiles: manifest.ciMetalMergedFile == nil ? 0 : 1,
@@ -124,9 +170,9 @@ public struct ORKSwiftNew {
     }
 
     private func validate(_ options: ObfuscationOptions) throws {
-        guard options.renameFiles || options.renameDirectories || options.renamePrivateFunctions || options.renameTypes || options.renameCIMetalFiles || options.mergeCIMetalFiles else {
+        guard options.renameFiles || options.renameDirectories || options.renamePrivateFunctions || options.renameTypes || options.renameEnumCases || options.obfuscateAssetCases || !options.securityStrings.isEmpty || options.renameCIMetalFiles || options.mergeCIMetalFiles else {
             throw ORKSwiftNewError.invalidConfiguration(
-                "Select at least one transform: --rename-files, --rename-directories, --rename-private-functions, --rename-types, --rename-ci-metal-files, or --merge-ci-metal-files"
+                "Select at least one transform: --rename-files, --rename-directories, --rename-private-functions, --rename-types, --rename-enum-cases, --obfuscate-asset-cases, --security-string, --rename-ci-metal-files, or --merge-ci-metal-files"
             )
         }
 
@@ -140,6 +186,14 @@ public struct ORKSwiftNew {
 
         if !options.dryRun, !options.inPlace, options.outputPath == nil {
             throw ORKSwiftNewError.invalidConfiguration("Use --output, --in-place, or --dry-run")
+        }
+
+        if options.obfuscateAssetCases {
+            if options.assetCaseEnumPath == nil || options.assetCaseEnumName == nil || options.assetCaseReceiverName == nil || options.assetCaseMethods.isEmpty {
+                throw ORKSwiftNewError.invalidConfiguration(
+                    "--obfuscate-asset-cases requires --asset-case-enum-path, --asset-case-enum-name, --asset-case-receiver, and at least one --asset-case-method"
+                )
+            }
         }
     }
 }

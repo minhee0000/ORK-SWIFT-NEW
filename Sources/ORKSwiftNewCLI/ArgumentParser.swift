@@ -44,10 +44,24 @@ struct ArgumentParser {
                 options.renamePrivateFunctions = true
             case "--rename-types":
                 options.renameTypes = true
+            case "--rename-enum-cases":
+                options.renameEnumCases = true
+            case "--obfuscate-asset-cases":
+                options.obfuscateAssetCases = true
+            case "--asset-case-enum-path":
+                options.assetCaseEnumPath = try requireValue(for: arg)
+            case "--asset-case-enum-name":
+                options.assetCaseEnumName = try requireValue(for: arg)
+            case "--asset-case-receiver":
+                options.assetCaseReceiverName = try requireValue(for: arg)
+            case "--asset-case-method":
+                options.assetCaseMethods.append(try requireValue(for: arg))
             case "--rename-ci-metal-files":
                 options.renameCIMetalFiles = true
             case "--merge-ci-metal-files":
                 options.mergeCIMetalFiles = true
+            case "--security-string":
+                options.securityStrings.append(try requireValue(for: arg))
             case "--quiet":
                 options.quiet = true
             case "--verbose":
@@ -81,8 +95,15 @@ struct ArgumentParser {
           --rename-directories         Rename Swift-only source directories in the working source tree.
           --rename-private-functions   Rename safe private/fileprivate Swift function declarations and local call sites.
           --rename-types               Rename safe internal/private Swift struct/class/enum/actor names and references.
+          --rename-enum-cases          Rename safe internal Swift enum case declarations and local member references.
+          --obfuscate-asset-cases      Rewrite protected asset enum case references using deterministic opaque names.
+          --asset-case-enum-path <path> Relative path of the generated protected asset enum source.
+          --asset-case-enum-name <name> Enum name containing protected asset cases.
+          --asset-case-receiver <name>  Static receiver used for protected asset case references.
+          --asset-case-method <name>    Static method containing protected asset case references. Repeat for multiple methods.
           --rename-ci-metal-files      Rename .ci.metal files, Core Image kernel functions, and matching Swift string literals.
           --merge-ci-metal-files       Merge Core Image .ci.metal files into one obfuscated Release library source.
+          --security-string <value>    Obfuscate one exact Swift string literal value. Repeat for multiple values.
           --exclude <pattern>          Skip matching files/directories. Repeat for multiple paths.
                                        Plain names match any path component; glob patterns match relative paths.
           --no-default-excludes        Disable built-in excludes: \(defaultExcludePatterns.joined(separator: ", ")).
@@ -96,10 +117,10 @@ struct ArgumentParser {
           --help                       Print this help.
 
         Safety:
-          Function and type renaming are intentionally conservative. Runtime-sensitive
-          declarations such as @objc, dynamic, override, public/open APIs, unsafe
-          overloads, function references, and suspicious string interpolation usages
-          are skipped.
+          Function, type, and enum case renaming are intentionally conservative.
+          Runtime-sensitive declarations such as @objc, dynamic, override,
+          public/open APIs, raw-value/Codable enums, unsafe overloads, function
+          references, and suspicious string interpolation usages are skipped.
         """
     }
 }

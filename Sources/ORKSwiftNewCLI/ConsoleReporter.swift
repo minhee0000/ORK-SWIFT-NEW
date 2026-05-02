@@ -20,6 +20,12 @@ struct ConsoleReporter {
                     manifestPath: options.manifestPath
                 )
             }
+            for skipped in result.manifest.skippedEnumCases {
+                writeLine(
+                    "[ORK-SWIFT-NEW] skipped enum case \(skipped.file):\(skipped.enumName).\(skipped.name) - \(skipped.reason)",
+                    manifestPath: options.manifestPath
+                )
+            }
         }
     }
 
@@ -32,8 +38,12 @@ struct ConsoleReporter {
         writeLine("\(prefix) CI Metal function renames: \(result.summary.ciMetalFunctionRenames)", manifestPath: manifestPath)
         writeLine("\(prefix) CI Metal merged files: \(result.summary.ciMetalMergedFiles)", manifestPath: manifestPath)
         writeLine("\(prefix) type renames: \(result.summary.typeRenames)", manifestPath: manifestPath)
+        writeLine("\(prefix) enum case renames: \(result.summary.enumCaseRenames)", manifestPath: manifestPath)
+        writeLine("\(prefix) asset case renames: \(result.summary.assetCaseRenames)", manifestPath: manifestPath)
         writeLine("\(prefix) function renames: \(result.summary.functionRenames)", manifestPath: manifestPath)
+        writeLine("\(prefix) security string obfuscations: \(result.summary.securityStringObfuscations)", manifestPath: manifestPath)
         writeLine("\(prefix) skipped types: \(result.summary.skippedTypes)", manifestPath: manifestPath)
+        writeLine("\(prefix) skipped enum cases: \(result.summary.skippedEnumCases)", manifestPath: manifestPath)
         writeLine("\(prefix) skipped functions: \(result.summary.skippedFunctions)", manifestPath: manifestPath)
         writeLine(
             "\(prefix) excludes: \(result.summary.excludedPatterns.isEmpty ? "(none)" : result.summary.excludedPatterns.joined(separator: ", "))",
