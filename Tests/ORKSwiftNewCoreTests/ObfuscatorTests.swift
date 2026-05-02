@@ -76,16 +76,16 @@ final class ObfuscatorTests: XCTestCase {
         let filters = input.appendingPathComponent("Filters")
         try fileManager.createDirectory(at: filters, withIntermediateDirectories: true)
 
-        let shader = filters.appendingPathComponent("DetailBlurShader.ci.metal")
-        try "kernel void detailBlur() {}\n".write(to: shader, atomically: true, encoding: .utf8)
+        let shader = filters.appendingPathComponent("PrimaryKernelSource.ci.metal")
+        try "kernel void primaryKernel() {}\n".write(to: shader, atomically: true, encoding: .utf8)
 
         let source = input.appendingPathComponent("Loader.swift")
         try """
         enum Demo {
             static func load() {
-                _ = CIMetalLibraryLoader.url(named: "DetailBlurShader")
-                _ = CIKernel(functionName: "detailBlur", fromMetalLibraryData: Data())
-                _ = ["DetailBlurShader", "default"]
+                _ = CIMetalLibraryLoader.url(named: "PrimaryKernelSource")
+                _ = CIKernel(functionName: "primaryKernel", fromMetalLibraryData: Data())
+                _ = ["PrimaryKernelSource", "default"]
             }
         }
         """.write(to: source, atomically: true, encoding: .utf8)
@@ -105,26 +105,26 @@ final class ObfuscatorTests: XCTestCase {
         XCTAssertEqual(result.manifest.ciMetalFunctionRenames.count, 1)
         let rename = try XCTUnwrap(result.manifest.ciMetalFileRenames.first)
         let functionRename = try XCTUnwrap(result.manifest.ciMetalFunctionRenames.first)
-        XCTAssertEqual(rename.from, "Filters/DetailBlurShader.ci.metal")
+        XCTAssertEqual(rename.from, "Filters/PrimaryKernelSource.ci.metal")
         XCTAssertTrue(rename.to.hasPrefix("Filters/R_"))
         XCTAssertTrue(rename.to.hasSuffix(".ci.metal"))
-        XCTAssertEqual(functionRename.file, "Filters/DetailBlurShader.ci.metal")
-        XCTAssertEqual(functionRename.from, "detailBlur")
+        XCTAssertEqual(functionRename.file, "Filters/PrimaryKernelSource.ci.metal")
+        XCTAssertEqual(functionRename.from, "primaryKernel")
         XCTAssertTrue(functionRename.to.hasPrefix("r_"))
-        XCTAssertFalse(fileManager.fileExists(atPath: output.appendingPathComponent("Filters/DetailBlurShader.ci.metal").path))
+        XCTAssertFalse(fileManager.fileExists(atPath: output.appendingPathComponent("Filters/PrimaryKernelSource.ci.metal").path))
         XCTAssertTrue(fileManager.fileExists(atPath: output.appendingPathComponent(rename.to).path))
 
         let transformed = try String(contentsOf: output.appendingPathComponent("Loader.swift"), encoding: .utf8)
         let newLoaderName = URL(fileURLWithPath: rename.to).lastPathComponent
             .replacingOccurrences(of: ".ci.metal", with: "")
-        XCTAssertFalse(transformed.contains("DetailBlurShader"))
-        XCTAssertFalse(transformed.contains("detailBlur"))
+        XCTAssertFalse(transformed.contains("PrimaryKernelSource"))
+        XCTAssertFalse(transformed.contains("primaryKernel"))
         XCTAssertTrue(transformed.contains("\"\(newLoaderName)\""))
         XCTAssertTrue(transformed.contains("\"\(functionRename.to)\""))
         XCTAssertTrue(transformed.contains("\"default\""))
 
         let transformedShader = try String(contentsOf: output.appendingPathComponent(rename.to), encoding: .utf8)
-        XCTAssertFalse(transformedShader.contains("detailBlur"))
+        XCTAssertFalse(transformedShader.contains("primaryKernel"))
         XCTAssertTrue(transformedShader.contains("kernel void \(functionRename.to)()"))
     }
 
@@ -137,80 +137,80 @@ final class ObfuscatorTests: XCTestCase {
         try fileManager.createDirectory(at: feature, withIntermediateDirectories: true)
 
         try """
-        enum ProtectedAssetKey: CaseIterable {
-            case primaryTexture
-            case noiseOverlay
-            case accentIcon
+        enum GeneratedKey: CaseIterable {
+            case alphaItem
+            case betaItem
+            case gammaItem
         }
 
-        enum AssetTable {
-            static func value(_ key: ProtectedAssetKey) -> String {
+        enum GeneratedRegistry {
+            static func value(_ key: GeneratedKey) -> String {
                 switch key {
-                case .primaryTexture: return "masked"
-                case .noiseOverlay: return "masked"
-                case .accentIcon: return "masked"
+                case .alphaItem: return "masked"
+                case .betaItem: return "masked"
+                case .gammaItem: return "masked"
                 }
             }
         }
-        """.write(to: generated.appendingPathComponent("ProtectedAssets.generated.swift"), atomically: true, encoding: .utf8)
+        """.write(to: generated.appendingPathComponent("GeneratedKeys.generated.swift"), atomically: true, encoding: .utf8)
 
         try """
-        enum AssetUsageCatalog {
-            static let texture = AssetCatalog.string(.primaryTexture)
-            static let overlay = AssetCatalog.string(.noiseOverlay)
-            static let textureRef = AssetCatalog.ref(.primaryTexture)
-            static let protectedIcon = AssetCatalog.string(.accentIcon)
-            static let uiIcon = FeatureKind.accentIcon
+        enum FeatureUsage {
+            static let first = RuntimeLookup.string(.alphaItem)
+            static let second = RuntimeLookup.string(.betaItem)
+            static let firstRef = RuntimeLookup.ref(.alphaItem)
+            static let generatedValue = RuntimeLookup.string(.gammaItem)
+            static let stableValue = FeatureKind.gammaItem
 
             static func run(config: FeatureConfig, feature: FeatureKind) {
-                _ = config.accentIcon
+                _ = config.gammaItem
                 switch feature {
-                case .accentIcon:
+                case .gammaItem:
                     break
                 }
             }
         }
 
         struct FeatureConfig {
-            var accentIcon: Int
+            var gammaItem: Int
         }
 
         enum FeatureKind {
-            case accentIcon
+            case gammaItem
         }
-        """.write(to: feature.appendingPathComponent("AssetUsageCatalog.swift"), atomically: true, encoding: .utf8)
+        """.write(to: feature.appendingPathComponent("FeatureUsage.swift"), atomically: true, encoding: .utf8)
 
         let result = try ORKSwiftNew(fileManager: fileManager).run(.init(
             inputPath: input.path,
             outputPath: output.path,
             seed: "unit-test",
             obfuscateAssetCases: true,
-            assetCaseEnumPath: "Generated/ProtectedAssets.generated.swift",
-            assetCaseEnumName: "ProtectedAssetKey",
-            assetCaseReceiverName: "AssetCatalog",
+            assetCaseEnumPath: "Generated/GeneratedKeys.generated.swift",
+            assetCaseEnumName: "GeneratedKey",
+            assetCaseReceiverName: "RuntimeLookup",
             assetCaseMethods: ["string", "ref"]
         ))
 
         XCTAssertEqual(result.manifest.assetCaseRenames.count, 3)
         XCTAssertEqual(result.summary.assetCaseRenames, 3)
         let generatedSource = try String(
-            contentsOf: output.appendingPathComponent("Generated/ProtectedAssets.generated.swift"),
+            contentsOf: output.appendingPathComponent("Generated/GeneratedKeys.generated.swift"),
             encoding: .utf8
         )
         let catalog = try String(
-            contentsOf: output.appendingPathComponent("Feature/AssetUsageCatalog.swift"),
+            contentsOf: output.appendingPathComponent("Feature/FeatureUsage.swift"),
             encoding: .utf8
         )
 
-        XCTAssertFalse(generatedSource.contains("primaryTexture"))
-        XCTAssertFalse(generatedSource.contains("noiseOverlay"))
-        XCTAssertFalse(catalog.contains("primaryTexture"))
-        XCTAssertFalse(catalog.contains("noiseOverlay"))
+        XCTAssertFalse(generatedSource.contains("alphaItem"))
+        XCTAssertFalse(generatedSource.contains("betaItem"))
+        XCTAssertFalse(catalog.contains("alphaItem"))
+        XCTAssertFalse(catalog.contains("betaItem"))
         XCTAssertTrue(generatedSource.contains("case c_"))
         XCTAssertTrue(catalog.contains(".c_"))
-        XCTAssertTrue(catalog.contains("FeatureKind.accentIcon"))
-        XCTAssertTrue(catalog.contains("config.accentIcon"))
-        XCTAssertTrue(catalog.contains("case .accentIcon:"))
+        XCTAssertTrue(catalog.contains("FeatureKind.gammaItem"))
+        XCTAssertTrue(catalog.contains("config.gammaItem"))
+        XCTAssertTrue(catalog.contains("case .gammaItem:"))
     }
 
     func testObfuscatesAllowlistedSecurityStrings() throws {
@@ -222,8 +222,8 @@ final class ObfuscatorTests: XCTestCase {
         import Foundation
 
         enum SecurityDemo {
-            static let frame = Data("Sample.asset-frame.v1".utf8)
-            static let queue = DispatchQueue(label: "com.example.product.secure.queue")
+            static let domain = Data("OpaqueFixture.domain.v1".utf8)
+            static let label = DispatchQueue(label: "fixture.runtime.queue")
             static let visible = "leave-me"
         }
         """.write(to: input.appendingPathComponent("SecurityDemo.swift"), atomically: true, encoding: .utf8)
@@ -233,17 +233,18 @@ final class ObfuscatorTests: XCTestCase {
             outputPath: output.path,
             seed: "unit-test",
             securityStrings: [
-                "Sample.asset-frame.v1",
-                "com.example.product.secure.queue",
+                "OpaqueFixture.domain.v1",
+                "fixture.runtime.queue",
             ],
             useDefaultExcludes: false
         ))
 
         XCTAssertEqual(result.summary.securityStringObfuscations, 2)
         let transformed = try String(contentsOf: output.appendingPathComponent("SecurityDemo.swift"), encoding: .utf8)
-        XCTAssertFalse(transformed.contains("Sample.asset-frame.v1"))
-        XCTAssertFalse(transformed.contains("com.example.product.secure.queue"))
-        XCTAssertTrue(transformed.contains("R0E.decode"))
+        XCTAssertFalse(transformed.contains("OpaqueFixture.domain.v1"))
+        XCTAssertFalse(transformed.contains("fixture.runtime.queue"))
+        XCTAssertFalse(transformed.contains("R0E.decode"))
+        XCTAssertTrue(transformed.contains("String(decoding: { () -> [UInt8] in"))
         XCTAssertTrue(transformed.contains("\"leave-me\""))
     }
 
@@ -253,61 +254,61 @@ final class ObfuscatorTests: XCTestCase {
         try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
 
         try """
-        enum FilterStep {
-            case gcColorLookup(name: String)
-            case detailBlur
-            case overlay(String)
+        enum WorkflowStep {
+            case primaryAction(name: String)
+            case secondaryAction
+            case payload(String)
         }
 
-        enum Decoration {
-            case overlay
+        enum Marker {
+            case payload
         }
 
-        enum PersistedMode: String {
-            case gcColorLookup
+        enum StoredMode: String {
+            case primaryAction
         }
 
         struct Demo {
-            var pipelineSteps: [FilterStep] = []
+            var stagedSteps: [WorkflowStep] = []
 
-            func run(step: FilterStep, decoration: Decoration, renderer: Renderer) {
-                let steps: [FilterStep] = [
-                    .gcColorLookup(name: "lut"),
-                    .detailBlur,
-                    .overlay("safe")
+            func run(step: WorkflowStep, marker: Marker, worker: Worker) {
+                let steps: [WorkflowStep] = [
+                    .primaryAction(name: "token"),
+                    .secondaryAction,
+                    .payload("safe")
                 ]
-                let aliasSteps = pipelineSteps
+                let aliasSteps = stagedSteps
                 for loopStep in aliasSteps {
                     switch loopStep {
-                    case .detailBlur:
+                    case .secondaryAction:
                         break
                     default:
                         break
                     }
                 }
-                _ = FilterStep.gcColorLookup(name: "lut")
+                _ = WorkflowStep.primaryAction(name: "token")
                 switch step {
-                case .gcColorLookup:
+                case .primaryAction:
                     break
-                case .detailBlur:
+                case .secondaryAction:
                     break
-                case .overlay:
-                    break
-                }
-                switch decoration {
-                case .overlay:
+                case .payload:
                     break
                 }
-                _ = renderer.gcColorLookup()
-                _ = renderer.detailBlur()
-                _ = PersistedMode.gcColorLookup
+                switch marker {
+                case .payload:
+                    break
+                }
+                _ = worker.primaryAction()
+                _ = worker.secondaryAction()
+                _ = StoredMode.primaryAction
                 _ = steps
             }
         }
 
-        struct Renderer {
-            func gcColorLookup() -> Int { 1 }
-            func detailBlur() -> Int { 1 }
+        struct Worker {
+            func primaryAction() -> Int { 1 }
+            func secondaryAction() -> Int { 1 }
         }
         """.write(to: input.appendingPathComponent("Demo.swift"), atomically: true, encoding: .utf8)
 
@@ -320,21 +321,21 @@ final class ObfuscatorTests: XCTestCase {
         ))
 
         XCTAssertEqual(result.summary.enumCaseRenames, 1)
-        XCTAssertTrue(result.manifest.enumCaseRenames.contains { $0.from == "detailBlur" })
-        XCTAssertTrue(result.manifest.skippedEnumCases.contains { $0.name == "overlay" })
-        XCTAssertTrue(result.manifest.skippedEnumCases.contains { $0.enumName == "PersistedMode" && $0.name == "gcColorLookup" })
+        XCTAssertTrue(result.manifest.enumCaseRenames.contains { $0.from == "secondaryAction" })
+        XCTAssertTrue(result.manifest.skippedEnumCases.contains { $0.name == "payload" })
+        XCTAssertTrue(result.manifest.skippedEnumCases.contains { $0.enumName == "StoredMode" && $0.name == "primaryAction" })
 
         let transformed = try String(contentsOf: output.appendingPathComponent("Demo.swift"), encoding: .utf8)
-        XCTAssertFalse(transformed.contains("case detailBlur"))
-        XCTAssertFalse(transformed.contains("case .detailBlur"))
+        XCTAssertFalse(transformed.contains("case secondaryAction"))
+        XCTAssertFalse(transformed.contains("case .secondaryAction"))
         XCTAssertTrue(transformed.contains("case e_"))
         XCTAssertTrue(transformed.contains(".e_"))
-        XCTAssertTrue(transformed.contains("case gcColorLookup(name: String)"))
-        XCTAssertTrue(transformed.contains("PersistedMode.gcColorLookup"))
-        XCTAssertTrue(transformed.contains("renderer.gcColorLookup()"))
-        XCTAssertTrue(transformed.contains("renderer.detailBlur()"))
-        XCTAssertTrue(transformed.contains("case overlay"))
-        XCTAssertTrue(transformed.contains(".overlay(\"safe\")"))
+        XCTAssertTrue(transformed.contains("case primaryAction(name: String)"))
+        XCTAssertTrue(transformed.contains("StoredMode.primaryAction"))
+        XCTAssertTrue(transformed.contains("worker.primaryAction()"))
+        XCTAssertTrue(transformed.contains("worker.secondaryAction()"))
+        XCTAssertTrue(transformed.contains("case payload"))
+        XCTAssertTrue(transformed.contains(".payload(\"safe\")"))
     }
 
     func testRenamesEnumCasesInMemberSwitchesAndComputedReturns() throws {
@@ -343,65 +344,65 @@ final class ObfuscatorTests: XCTestCase {
         try fileManager.createDirectory(at: input, withIntermediateDirectories: true)
 
         try """
-        enum FillMode {
-            case scaleToFill
-            case stretchToFill
-            case tile
+        enum LayoutMode {
+            case fitContent
+            case stretchContent
+            case repeatContent
         }
 
-        struct Overlay {
-            let fillMode: FillMode
+        struct LayoutBox {
+            let layoutMode: LayoutMode
         }
 
-        enum SessionState {
-            case inactive
-            case photoPreview
-            case recording
+        enum ProcessState {
+            case idle
+            case review
+            case running
         }
 
-        enum CaptureMode {
-            case photo
-            case video
+        enum OperationMode {
+            case modeAlpha
+            case modeBeta
         }
 
-        enum TimerMode {
-            case off
-            case seconds3
+        enum DelayMode {
+            case none
+            case short
         }
 
         struct FeatureState {
-            var timerMode: TimerMode = .off
+            var delayMode: DelayMode = .none
         }
 
         struct Demo {
-            var captureMode: CaptureMode = .photo
+            var operationMode: OperationMode = .modeAlpha
             var isActive = false
             var state = FeatureState()
 
-            func loadEffect(_ overlay: Overlay) -> Int {
-                switch overlay.fillMode {
-                case .scaleToFill:
+            func evaluate(_ box: LayoutBox) -> Int {
+                switch box.layoutMode {
+                case .fitContent:
                     return 0
-                case .stretchToFill:
+                case .stretchContent:
                     return 1
-                case .tile:
+                case .repeatContent:
                     return 2
                 }
             }
 
-            var desiredState: SessionState {
-                guard isActive else { return .inactive }
-                switch captureMode {
-                case .photo: return .photoPreview
-                case .video: return .recording
+            var desiredState: ProcessState {
+                guard isActive else { return .idle }
+                switch operationMode {
+                case .modeAlpha: return .review
+                case .modeBeta: return .running
                 }
             }
 
-            func timerText() -> String {
-                let mode = state.timerMode
+            func delayText() -> String {
+                let mode = state.delayMode
                 switch mode {
-                case .off: return "off"
-                case .seconds3: return "3"
+                case .none: return "none"
+                case .short: return "short"
                 }
             }
         }
@@ -409,12 +410,12 @@ final class ObfuscatorTests: XCTestCase {
 
         try """
         enum CrossFileMode {
-            case first
-            case second
+            case crossAlpha
+            case crossBeta
         }
 
         struct CrossFileStore {
-            var crossFileMode: CrossFileMode = .first
+            var crossFileMode: CrossFileMode = .crossAlpha
         }
         """.write(to: input.appendingPathComponent("Types.swift"), atomically: true, encoding: .utf8)
 
@@ -425,8 +426,8 @@ final class ObfuscatorTests: XCTestCase {
             func text() -> String {
                 let mode = store.crossFileMode
                 switch mode {
-                case .first: return "first"
-                case .second: return "second"
+                case .crossAlpha: return "first"
+                case .crossBeta: return "second"
                 }
             }
         }
@@ -444,16 +445,16 @@ final class ObfuscatorTests: XCTestCase {
 
         let transformed = try String(contentsOf: output.appendingPathComponent("Demo.swift"), encoding: .utf8)
         let transformedView = try String(contentsOf: output.appendingPathComponent("View.swift"), encoding: .utf8)
-        XCTAssertFalse(transformed.contains("case scaleToFill"))
-        XCTAssertFalse(transformed.contains("case stretchToFill"))
-        XCTAssertFalse(transformed.contains("case tile"))
-        XCTAssertFalse(transformed.contains("case inactive"))
-        XCTAssertFalse(transformed.contains("case photoPreview"))
-        XCTAssertFalse(transformed.contains("case seconds3"))
-        XCTAssertFalse(transformed.contains("case .stretchToFill"))
-        XCTAssertFalse(transformed.contains("return .inactive"))
-        XCTAssertFalse(transformed.contains("case .seconds3"))
-        XCTAssertFalse(transformedView.contains("case .second"))
+        XCTAssertFalse(transformed.contains("case fitContent"))
+        XCTAssertFalse(transformed.contains("case stretchContent"))
+        XCTAssertFalse(transformed.contains("case repeatContent"))
+        XCTAssertFalse(transformed.contains("case idle"))
+        XCTAssertFalse(transformed.contains("case review"))
+        XCTAssertFalse(transformed.contains("case short"))
+        XCTAssertFalse(transformed.contains("case .stretchContent"))
+        XCTAssertFalse(transformed.contains("return .idle"))
+        XCTAssertFalse(transformed.contains("case .short"))
+        XCTAssertFalse(transformedView.contains("case .crossBeta"))
     }
 
     func testMergesCIMetalFilesIntoSingleGeneratedSource() throws {
@@ -464,22 +465,22 @@ final class ObfuscatorTests: XCTestCase {
 
         try """
         extern "C" {
-            float4 detailBlur(sampler input) { return sample(input, input.coord()); }
+            float4 alphaKernel(sampler input) { return sample(input, input.coord()); }
         }
-        """.write(to: filters.appendingPathComponent("DetailBlurShader.ci.metal"), atomically: true, encoding: .utf8)
+        """.write(to: filters.appendingPathComponent("AlphaKernelSource.ci.metal"), atomically: true, encoding: .utf8)
         try """
         extern "C" {
-            float4 darkCornerBlend(sampler input) { return sample(input, input.coord()); }
+            float4 betaKernel(sampler input) { return sample(input, input.coord()); }
         }
-        """.write(to: filters.appendingPathComponent("DarkCornerBlendShader.ci.metal"), atomically: true, encoding: .utf8)
+        """.write(to: filters.appendingPathComponent("BetaKernelSource.ci.metal"), atomically: true, encoding: .utf8)
 
         try """
         enum Demo {
             static func load() {
-                _ = CIMetalLibraryLoader.url(named: "DetailBlurShader")
-                _ = CIMetalLibraryLoader.url(named: "DarkCornerBlendShader")
-                _ = CIKernel(functionName: "detailBlur", fromMetalLibraryData: Data())
-                _ = CIKernel(functionName: "darkCornerBlend", fromMetalLibraryData: Data())
+                _ = CIMetalLibraryLoader.url(named: "AlphaKernelSource")
+                _ = CIMetalLibraryLoader.url(named: "BetaKernelSource")
+                _ = CIKernel(functionName: "alphaKernel", fromMetalLibraryData: Data())
+                _ = CIKernel(functionName: "betaKernel", fromMetalLibraryData: Data())
             }
         }
         """.write(to: input.appendingPathComponent("Loader.swift"), atomically: true, encoding: .utf8)
@@ -511,10 +512,10 @@ final class ObfuscatorTests: XCTestCase {
         let mergedName = URL(fileURLWithPath: mergedRelative).lastPathComponent
             .replacingOccurrences(of: ".ci.metal", with: "")
         let transformed = try String(contentsOf: output.appendingPathComponent("Loader.swift"), encoding: .utf8)
-        XCTAssertFalse(transformed.contains("DetailBlurShader"))
-        XCTAssertFalse(transformed.contains("DarkCornerBlendShader"))
-        XCTAssertFalse(transformed.contains("detailBlur"))
-        XCTAssertFalse(transformed.contains("darkCornerBlend"))
+        XCTAssertFalse(transformed.contains("AlphaKernelSource"))
+        XCTAssertFalse(transformed.contains("BetaKernelSource"))
+        XCTAssertFalse(transformed.contains("alphaKernel"))
+        XCTAssertFalse(transformed.contains("betaKernel"))
         XCTAssertEqual(transformed.components(separatedBy: "\"\(mergedName)\"").count - 1, 2)
         XCTAssertEqual(result.summary.ciMetalMergedFiles, 1)
     }
